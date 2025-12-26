@@ -181,13 +181,15 @@
                 <!-- 账号登录 -->
                 <div id="panel-direct">
                     <form id="login-form" class="auth-form">
-                        <input id="login-username" autocomplete="username" placeholder="用户名（例如：veasil）" required />
-                        <input id="login-password" type="password" autocomplete="current-password" placeholder="密码" required />
-                        <div class="auth-actions">
-                            <button type="submit" class="auth-btn" style="flex:1;">登录</button>
-                            <button type="button" id="register-btn" class="auth-btn secondary" style="flex:1;">注册</button>
+                        <input id="login-phone" autocomplete="tel" placeholder="手机号" required />
+                        <div style="display:flex; gap:10px;">
+                            <input id="login-code" placeholder="验证码" style="flex:1;" required />
+                            <button type="button" id="sms-send-btn" class="auth-btn secondary" style="white-space:nowrap;">获取验证码</button>
                         </div>
-                        <div class="auth-hint">提示：这是「快速可用」的直接登录方案。生产环境建议加手机验证码/风控。</div>
+                        <div class="auth-actions">
+                            <button type="submit" class="auth-btn" style="flex:1;">验证并登录</button>
+                        </div>
+                        <div id="sms-status" class="auth-hint">提示：本地模拟短信，点击「获取验证码」后会直接在页面提示验证码。</div>
                     </form>
                 </div>
 
@@ -321,6 +323,14 @@
             const panelDirect = document.getElementById('panel-direct');
             const panelWechat = document.getElementById('panel-wechat');
 
+            const loginForm = document.getElementById('login-form');
+            const phoneInput = document.getElementById('login-phone');
+            const codeInput = document.getElementById('login-code');
+            const smsSendBtn = document.getElementById('sms-send-btn');
+            const smsStatus = document.getElementById('sms-status');
+            let smsCountdownTimer = null;
+            let smsCountdownLeft = 0;
+
             function activateTab(which) {
                 if (which === 'direct') {
                     tabDirect.classList.add('active'); tabWechat.classList.remove('active');
@@ -333,16 +343,54 @@
             tabDirect.onclick = () => activateTab('direct');
             tabWechat.onclick = () => activateTab('wechat');
 
-            // 账号登录 + 注册
-            const loginForm = document.getElementById('login-form');
-            const registerBtn = document.getElementById('register-btn');
+            function updateSmsCountdownUI() {
+                if (smsCountdownLeft > 0) {
+                    smsSendBtn.textContent = `重新获取(${smsCountdownLeft}s)`;
+                    smsSendBtn.disabled = true;
+                } else {
+                    smsSendBtn.textContent = '获取验证码';
+                    smsSendBtn.disabled = false;
+                }
+            }
+
+            function startSmsCountdown(seconds = 60) {
+                if (smsCountdownTimer) clearInterval(smsCountdownTimer);
+                smsCountdownLeft = seconds;
+                updateSmsCountdownUI();
+                smsCountdownTimer = setInterval(() => {
+                    smsCountdownLeft -= 1;
+                    if (smsCountdownLeft <= 0) {
+                        clearInterval(smsCountdownTimer);
+                        smsCountdownTimer = null;
+                        smsCountdownLeft = 0;
+                    }
+                    updateSmsCountdownUI();
+                }, 1000);
+            }
+
+            smsSendBtn.onclick = async () => {
+                const phone = phoneInput.value.trim();
+                if (!phone) { alert('请先填写手机号'); return; }
+                smsStatus.textContent = '发送中...';
+                smsSendBtn.disabled = true;
+                try {
+                    const ret = await api('/api/auth/sms/send', { method:'POST', body:{ phone } });
+                    const expireSec = ret.expiresInSeconds || 300;
+                    smsStatus.textContent = `验证码已发送，${expireSec}秒内有效。模拟环境验证码：${ret.mockCode || '请查看控制台日志'}`;
+                    startSmsCountdown(60);
+                } catch (err) {
+                    smsStatus.textContent = '发送失败：' + err.message;
+                    updateSmsCountdownUI();
+                }
+            };
 
             loginForm.onsubmit = async (e) => {
                 e.preventDefault();
-                const username = document.getElementById('login-username').value.trim();
-                const password = document.getElementById('login-password').value;
+                const phone = phoneInput.value.trim();
+                const code = codeInput.value.trim();
+                if (!phone || !code) { alert('请输入手机号和验证码'); return; }
                 try {
-                    const ret = await api('/api/auth/login', { method:'POST', body:{ username, password } });
+                    const ret = await api('/api/auth/sms/verify', { method:'POST', body:{ phone, code } });
                     authState.token = ret.token;
                     authState.user = ret.user;
                     localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
@@ -350,22 +398,6 @@
                     closeAuthModal();
                 } catch (err) {
                     alert('登录失败：' + err.message);
-                }
-            };
-
-            registerBtn.onclick = async () => {
-                const username = document.getElementById('login-username').value.trim();
-                const password = document.getElementById('login-password').value;
-                if (!username || !password) { alert('请先填写用户名和密码再注册'); return; }
-                try {
-                    const ret = await api('/api/auth/register', { method:'POST', body:{ username, password } });
-                    authState.token = ret.token;
-                    authState.user = ret.user;
-                    localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
-                    setAuthUI(true);
-                    closeAuthModal();
-                } catch (err) {
-                    alert('注册失败：' + err.message);
                 }
             };
 
@@ -894,7 +926,7 @@
 - 游戏时长: ${Math.round((gameAnalytics.endTime - gameAnalytics.startTime) / 60000)}分钟
 - 创心力技能所创造的选项D：${creativeOptionsText}
 
-请用杨红樱的温馨、充满童真的风格，写一个约400字的成长故事。故事中要体现小主人公在AI世界的成长历程，包括面对数字世界的多重挑战（身体/心理/社交/经济/数字权益风险）、使用数智技能获取伍力免疫力能量等经历。语言要简单易懂、充满想象力和正能量。
+请用杨红樱的温馨、充满童真的风格，写一个详细的成长故事。故事中要体现小主人公在AI世界的成长历程，包括面对数字世界的多重挑战（身体/心理/社交/经济/数字权益风险）、使用数智技能获取伍力免疫力能量等经历。语言要简单易懂、充满想象力和正能量。
 【写作要求】
 - 像儿童书一样：表达情绪、动作、对话、童真视角
 - 富有创造力和同情力，每个阶段写成一个小型冒险

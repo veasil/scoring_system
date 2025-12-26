@@ -31,6 +31,20 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, "public")));
 
+// ======== SMS mock storage ========
+const smsStore = new Map(); // phone => { code, expiresAt, lastSent }
+const SMS_CODE_TTL_MS = 5 * 60 * 1000;
+const SMS_RESEND_INTERVAL_MS = 60 * 1000;
+
+function normalizePhone(input) {
+  if (!input) return "";
+  return String(input).replace(/\D/g, "");
+}
+
+function generateSmsCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 // ======== Auth helpers ========
 function signToken(user) {
   return jwt.sign({ uid: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
@@ -78,6 +92,52 @@ app.post("/api/auth/login", async (req, res) => {
 
   const token = signToken(user);
   res.json({ user: { id: user.id, username: user.username }, token });
+});
+
+// ======== API: SMS mock login ========
+app.post("/api/auth/sms/send", async (req, res) => {
+  const phone = normalizePhone(req.body?.phone || req.body?.mobile);
+  if (!phone) return res.status(400).json({ error: "缺少手机号" });
+  if (phone.length < 6) return res.status(400).json({ error: "手机号格式不正确" });
+
+  const now = Date.now();
+  const existing = smsStore.get(phone);
+  if (existing && now - existing.lastSent < SMS_RESEND_INTERVAL_MS) {
+    const waitSec = Math.ceil((SMS_RESEND_INTERVAL_MS - (now - existing.lastSent)) / 1000);
+    return res.status(429).json({ error: `发送过于频繁，请${waitSec}秒后重试` });
+  }
+
+  const code = generateSmsCode();
+  smsStore.set(phone, { code, expiresAt: now + SMS_CODE_TTL_MS, lastSent: now });
+  console.log(`[sms-mock] phone=${phone} code=${code}`);
+
+  // mockCode 仅供本地调试使用；真实环境应改为调用短信服务商接口
+  res.json({ ok: true, mockCode: code, expiresInSeconds: Math.floor(SMS_CODE_TTL_MS / 1000) });
+});
+
+app.post("/api/auth/sms/verify", async (req, res) => {
+  const phone = normalizePhone(req.body?.phone || req.body?.mobile);
+  const code = String(req.body?.code || "").trim();
+  if (!phone || !code) return res.status(400).json({ error: "手机号或验证码缺失" });
+
+  const record = smsStore.get(phone);
+  if (!record) return res.status(400).json({ error: "请先获取验证码" });
+  const now = Date.now();
+  if (now > record.expiresAt) {
+    smsStore.delete(phone);
+    return res.status(400).json({ error: "验证码已过期" });
+  }
+  if (record.code !== code) return res.status(400).json({ error: "验证码错误" });
+
+  let user = await dbGet("SELECT id, username FROM users WHERE username = ?", [phone]);
+  if (!user) {
+    const r = await dbRun("INSERT INTO users(username) VALUES(?)", [phone]);
+    user = { id: r.lastID, username: phone };
+  }
+
+  const token = signToken(user);
+  smsStore.delete(phone);
+  res.json({ user, token });
 });
 
 // 前端会调用，但我们这里不维护 server-side session，所以直接返回 ok
@@ -170,6 +230,8 @@ app.get("/api/auth/wechat/poll", async (_req, res) => {
 });
 
 // ======== Start ========
-app.listen(PORT, () => {
-  console.log(`✅ Server running on http://localhost:${PORT}`);
+const HOST = process.env.HOST || '8.210.121.92';
+app.listen(PORT, HOST, () => {
+  console.log(`✅ Server running on http://${HOST}:${PORT}`);
+  console.log(`🌐 Local access: http://localhost:${PORT}`);
 });
