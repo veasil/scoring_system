@@ -230,7 +230,7 @@ app.get("/api/auth/wechat/poll", async (_req, res) => {
 });
 
 // ======== Start ========
-const HOST = process.env.HOST || '8.210.121.92';
+const HOST = process.env.HOST || '0.0.0.0';
 app.listen(PORT, HOST, () => {
   console.log(`✅ Server running on http://${HOST}:${PORT}`);
   console.log(`🌐 Local access: http://localhost:${PORT}`);
