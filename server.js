@@ -12,7 +12,7 @@ import { initDb, dbRun, dbGet, dbAll } from "./src/db.js";
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 80);
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
 await initDb();
