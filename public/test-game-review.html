@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游戏复盘模块测试</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+        }
+        .test-button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 14px;
+        }
+        .test-button:hover {
+            background: #5a6fd8;
+        }
+        .test-result {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            border-left: 4px solid #667eea;
+        }
+        .error {
+            border-left-color: #dc3545;
+            background: #f8d7da;
+        }
+        .success {
+            border-left-color: #28a745;
+            background: #d4edda;
+        }
+        pre {
+            background: #f1f3f4;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧪 游戏复盘模块测试</h1>
+        
+        <div class="test-section">
+            <h3>1. 模块加载测试</h3>
+            <button class="test-button" onclick="testModuleLoad()">测试模块加载</button>
+            <div id="module-test-result" class="test-result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>1.5. AI连接测试</h3>
+            <button class="test-button" onclick="testAIConnection()">测试AI连接</button>
+            <div id="ai-test-result" class="test-result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>2. 数据提取测试</h3>
+            <button class="test-button" onclick="testDataExtraction()">测试数据提取</button>
+            <div id="extraction-test-result" class="test-result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>3. 故事生成测试（模拟）</h3>
+            <button class="test-button" onclick="testStoryGeneration()">测试故事生成</button>
+            <div id="story-test-result" class="test-result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>4. HTML报告生成测试</h3>
+            <button class="test-button" onclick="testHTMLGeneration()">测试HTML生成</button>
+            <div id="html-test-result" class="test-result" style="display: none;"></div>
+        </div>
+
+        <div class="test-section">
+            <h3>5. 完整流程测试</h3>
+            <button class="test-button" onclick="testFullProcess()">测试完整流程</button>
+            <div id="full-test-result" class="test-result" style="display: none;"></div>
+        </div>
+    </div>
+
+    <script src="game-review.js"></script>
+    <script>
+        // 模拟游戏数据
+        const mockGameHistory = [
+            {
+                cardId: 1,
+                question: "你在网上看到一个很有趣的链接，但不确定是否安全",
+                choice: "A",
+                scoreChange: { "安全力": 1, "脑波力": 0, "实感力": 0, "创心力": 0, "沟通力": 0 },
+                timeSpent: 15000,
+                isCreativeOption: false,
+                timestamp: new Date(Date.now() - 300000)
+            },
+            {
+                cardId: 5,
+                question: "朋友发来一个需要输入个人信息的小程序",
+                choice: "B", 
+                scoreChange: { "安全力": 0, "脑波力": 1, "实感力": 0, "创心力": 0, "沟通力": 0 },
+                timeSpent: 45000,
+                isCreativeOption: false,
+                timestamp: new Date(Date.now() - 240000)
+            },
+            {
+                cardId: 8,
+                question: "遇到网络诈骗信息",
+                choice: "D",
+                scoreChange: { "安全力": 2, "脑波力": 0, "实感力": 1, "创心力": 1, "沟通力": 0 },
+                timeSpent: 25000,
+                isCreativeOption: true,
+                timestamp: new Date(Date.now() - 180000)
+            },
+            {
+                cardId: 12,
+                question: "AI工具使用中的隐私问题",
+                choice: "C",
+                scoreChange: { "安全力": -1, "脑波力": 0, "实感力": 2, "创心力": 0, "沟通力": 1 },
+                timeSpent: 35000,
+                isCreativeOption: false,
+                timestamp: new Date(Date.now() - 120000)
+            }
+        ];
+
+        const mockGameAnalytics = {
+            cardsPlayed: mockGameHistory,
+            skillUsage: [
+                { skill: "创心力", cardId: 8, timestamp: new Date(Date.now() - 180000), optionD: "向朋友科普防诈骗知识" },
+                { skill: "安全力", timestamp: new Date(Date.now() - 100000), rescued: ["安全力"] }
+            ],
+            attributeChanges: [],
+            failures: [
+                { cardId: 12, failureCount: 1, timestamp: new Date(Date.now() - 120000) }
+            ],
+            startTime: new Date(Date.now() - 360000),
+            endTime: new Date(),
+            creativeOptions: { 8: "向朋友科普防诈骗知识" }
+        };
+
+        // 模拟API调用
+        function mockLLMAPI(prompt) {
+            return new Promise((resolve) => {
+                setTimeout(() => {
+                    if (prompt.includes('分析数据')) {
+                        resolve(JSON.stringify({
+                            keyMoments: [
+                                { type: 'breakthrough', cardId: 8, impact: 4, description: '创心力选项带来重大突破' },
+                                { type: 'setback', cardId: 12, impact: -1, description: '安全力下降遭遇挫折' }
+                            ],
+                            decisionPatterns: [
+                                { pattern: 'creative_thinking', frequency: 1, description: '善于创新思考' },
+                                { pattern: 'safety_conscious', frequency: 2, description: '注重安全防护' }
+                            ],
+                            growthHighlights: [
+                                { moment: '创心力技能使用', description: '展现了创新解决问题的能力' }
+                            ],
+                            reflectionPoints: [
+                                { moment: '深思熟虑的选择', description: '在关键时刻能够仔细思考' }
+                            ]
+                        }));
+                    } else if (prompt.includes('第一部分')) {
+                        resolve(`# 小伍的AI成长之旅
+
+## 启程的那一天
+
+小伍踏进了神奇的AI世界，就像爱丽丝掉进了兔子洞。在这个充满数字魔法的地方，每一个选择都像是在种下一颗种子。
+
+## 第一次冒险：网络安全小卫士
+
+当小伍遇到可疑链接时，她的安全力像小小的盾牌一样闪闪发光。虽然只是一个简单的选择，但这是她成为数字世界小卫士的第一步。
+
+## 创心力的绽放
+
+最让人惊喜的是第8张卡牌，小伍不仅选择了正确的答案，还发挥创心力，想出了"向朋友科普防诈骗知识"这样温暖的解决方案。那一刻，她的伍力值像烟花一样绚烂绽放。
+
+## 挫折中的成长
+
+在第12张卡牌时，小伍遇到了小小的挫折，安全力下降了。但就像小树苗遇到风雨，这让她更加坚强，学会了在AI时代保护自己的隐私。`);
+                    } else if (prompt.includes('第二部分')) {
+                        resolve(`# 成长的智慧与启示
+
+## 有趣的发现
+
+### 🌟 创新思维的力量
+小伍在游戏中展现出了难得的创新思维，特别是在面对网络诈骗时，她不仅保护了自己，还想到了帮助朋友。
+
+### 🛡️ 安全意识的培养
+虽然经历了一次小挫折，但小伍的安全意识在整个过程中都在稳步提升。
+
+### 🤔 深思熟虑的品质
+数据显示，小伍在重要决策时会花更多时间思考，这是一个非常好的习惯。
+
+## 温暖的启示
+
+亲爱的小伍，你的AI成长之旅告诉我们：在这个数字时代，最重要的不是永远做对选择，而是在每一次选择中学会思考、学会关爱他人、学会保护自己。
+
+就像杨红樱阿姨说的那样："成长不是一帆风顺的，但每一次跌倒都是为了更好地站起来。"
+
+愿你在AI的世界里，永远保持那颗善良而智慧的心。`);
+                    }
+                }, 1000);
+            });
+        }
+
+        // 测试函数
+        function testModuleLoad() {
+            const resultDiv = document.getElementById('module-test-result');
+            resultDiv.style.display = 'block';
+            
+            if (window.gameReviewModule && typeof window.gameReviewModule.generateFullReport === 'function') {
+                resultDiv.className = 'test-result success';
+                resultDiv.innerHTML = '✅ 模块加载成功！GameReviewModule 已正确初始化。';
+            } else {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = '❌ 模块加载失败！请检查 game-review.js 是否正确加载。';
+            }
+        }
+
+        async function testAIConnection() {
+            const resultDiv = document.getElementById('ai-test-result');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '⏳ 正在测试AI连接...';
+            
+            try {
+                const response = await fetch('/api/llm/story', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('WQT_AUTH_TOKEN') || 'test_token'}`
+                    },
+                    body: JSON.stringify({
+                        prompt: '请回复“测试成功”',
+                        max_tokens: 50,
+                        temperature: 0.1
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    resultDiv.className = 'test-result success';
+                    resultDiv.innerHTML = `
+                        ✅ AI连接成功！
+                        <p><strong>模型响应:</strong></p>
+                        <div style="background: #f0f0f0; padding: 10px; border-radius: 4px; margin-top: 10px;">
+                            ${data.story || '无响应内容'}
+                        </div>
+                    `;
+                } else {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(`HTTP ${response.status}: ${errorData.error || response.statusText}`);
+                }
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `❌ AI连接失败：${error.message}`;
+            }
+        }
+
+        async function testDataExtraction() {
+            const resultDiv = document.getElementById('extraction-test-result');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '⏳ 正在测试数据提取...';
+            
+            try {
+                // 临时替换 API 调用
+                const originalCallLLM = window.gameReviewModule.callLLMAPI;
+                window.gameReviewModule.callLLMAPI = mockLLMAPI;
+                
+                const result = await window.gameReviewModule.extractInterestingData(mockGameHistory, mockGameAnalytics);
+                
+                resultDiv.className = 'test-result success';
+                resultDiv.innerHTML = `
+                    ✅ 数据提取测试成功！
+                    <pre>${JSON.stringify(result, null, 2)}</pre>
+                `;
+                
+                // 恢复原始方法
+                window.gameReviewModule.callLLMAPI = originalCallLLM;
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `❌ 数据提取测试失败：${error.message}`;
+            }
+        }
+
+        async function testStoryGeneration() {
+            const resultDiv = document.getElementById('story-test-result');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '⏳ 正在测试故事生成...';
+            
+            try {
+                // 临时替换 API 调用
+                const originalCallLLM = window.gameReviewModule.callLLMAPI;
+                window.gameReviewModule.callLLMAPI = mockLLMAPI;
+                
+                const mockAnalysisData = {
+                    keyMoments: [{ type: 'breakthrough', cardId: 8, impact: 4 }],
+                    decisionPatterns: [{ pattern: 'creative_thinking', frequency: 1 }],
+                    growthHighlights: [{ moment: '创心力技能使用' }],
+                    reflectionPoints: [{ moment: '深思熟虑的选择' }]
+                };
+                
+                const mockGameStats = {
+                    cardsCompleted: 4,
+                    totalTime: 360000,
+                    finalScore: 18,
+                    skillUsage: 2,
+                    creativeChoices: 1
+                };
+                
+                const storyParts = await window.gameReviewModule.generateStoryParts(mockAnalysisData, mockGameStats);
+                
+                resultDiv.className = 'test-result success';
+                resultDiv.innerHTML = `
+                    ✅ 故事生成测试成功！
+                    <h4>第一部分预览：</h4>
+                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin: 10px 0;">
+                        ${storyParts.part1.substring(0, 300)}...
+                    </div>
+                    <h4>第二部分预览：</h4>
+                    <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin: 10px 0;">
+                        ${storyParts.part2.substring(0, 300)}...
+                    </div>
+                `;
+                
+                // 恢复原始方法
+                window.gameReviewModule.callLLMAPI = originalCallLLM;
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `❌ 故事生成测试失败：${error.message}`;
+            }
+        }
+
+        function testHTMLGeneration() {
+            const resultDiv = document.getElementById('html-test-result');
+            resultDiv.style.display = 'block';
+            
+            try {
+                const mockStoryParts = {
+                    part1: "# 小伍的成长历程\n\n这是一个温馨的故事...",
+                    part2: "# 智慧与启示\n\n通过这次冒险，小伍学到了..."
+                };
+                
+                const mockGameStats = {
+                    cardsCompleted: 4,
+                    totalTime: 360000,
+                    finalScore: 18,
+                    skillUsage: 2,
+                    creativeChoices: 1
+                };
+                
+                const htmlReport = window.gameReviewModule.generateHTMLReport(mockStoryParts, mockGameStats);
+                
+                if (htmlReport && htmlReport.includes('<!DOCTYPE html>') && htmlReport.includes('小伍的AI成长日记')) {
+                    resultDiv.className = 'test-result success';
+                    resultDiv.innerHTML = `
+                        ✅ HTML报告生成测试成功！
+                        <p>报告长度：${htmlReport.length} 字符</p>
+                        <button onclick="previewHTML('${btoa(encodeURIComponent(htmlReport))}')" class="test-button">预览报告</button>
+                    `;
+                } else {
+                    throw new Error('HTML格式不正确');
+                }
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `❌ HTML生成测试失败：${error.message}`;
+            }
+        }
+
+        async function testFullProcess() {
+            const resultDiv = document.getElementById('full-test-result');
+            resultDiv.style.display = 'block';
+            resultDiv.innerHTML = '⏳ 正在测试完整流程...';
+            
+            try {
+                // 临时替换相关方法
+                const originalCallLLM = window.gameReviewModule.callLLMAPI;
+                const originalDownload = window.gameReviewModule.downloadHTMLReport;
+                
+                window.gameReviewModule.callLLMAPI = mockLLMAPI;
+                window.gameReviewModule.downloadHTMLReport = (html) => {
+                    console.log('模拟下载HTML报告，长度：', html.length);
+                };
+                
+                // 模拟进度显示
+                window.gameReviewModule.showProgress = (message, isComplete, isError) => {
+                    console.log('进度：', message);
+                };
+                
+                await window.gameReviewModule.generateFullReport(mockGameHistory, mockGameAnalytics);
+                
+                resultDiv.className = 'test-result success';
+                resultDiv.innerHTML = `
+                    ✅ 完整流程测试成功！
+                    <p>✓ 数据提取完成</p>
+                    <p>✓ 故事生成完成</p>
+                    <p>✓ HTML报告生成完成</p>
+                    <p>✓ 模拟下载完成</p>
+                `;
+                
+                // 恢复原始方法
+                window.gameReviewModule.callLLMAPI = originalCallLLM;
+                window.gameReviewModule.downloadHTMLReport = originalDownload;
+            } catch (error) {
+                resultDiv.className = 'test-result error';
+                resultDiv.innerHTML = `❌ 完整流程测试失败：${error.message}`;
+            }
+        }
+
+        function previewHTML(encodedHTML) {
+            const htmlContent = decodeURIComponent(atob(encodedHTML));
+            const newWindow = window.open();
+            newWindow.document.write(htmlContent);
+            newWindow.document.close();
+        }
+
+        // 页面加载完成后自动测试模块加载
+        window.addEventListener('load', () => {
+            setTimeout(testModuleLoad, 500);
+        });
+    </script>
+</body>
+</html>

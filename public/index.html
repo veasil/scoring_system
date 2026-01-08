@@ -176,6 +176,7 @@
                 <div class="auth-tabs">
                     <button class="auth-tab active" id="tab-direct">账号登录</button>
                     <button class="auth-tab" id="tab-wechat">微信登录</button>
+                    <button class="auth-tab" id="tab-dev" style="background: #f0f0f0; font-size: 12px; padding: 6px 8px;">开发者</button>
                 </div>
 
                 <!-- 账号登录 -->
@@ -189,7 +190,7 @@
                         <div class="auth-actions">
                             <button type="submit" class="auth-btn" style="flex:1;">验证并登录</button>
                         </div>
-                        <div id="sms-status" class="auth-hint">提示：本地模拟短信，点击「获取验证码」后会直接在页面提示验证码。</div>
+                        <div id="sms-status" class="auth-hint">点击「获取验证码」后手机会收到六位验证码。</div>
                     </form>
                 </div>
 
@@ -204,6 +205,21 @@
                                 若在电脑浏览器：可用「微信开放平台网站应用扫码登录」。
                             </div>
                             <div id="wechat-status" class="auth-hint" style="margin-top:10px;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 开发者模式 -->
+                <div id="panel-dev" class="hidden">
+                    <div class="auth-form">
+                        <div class="auth-hint" style="margin-bottom: 15px; color: #666;">
+                            <strong>开发者模式</strong><br/>
+                            绕过短信验证，直接使用本地模拟登录。仅用于开发测试。
+                        </div>
+                        <input id="dev-username" placeholder="输入任意用户名" style="margin-bottom: 10px;" />
+                        <button id="dev-login-btn" class="auth-btn" style="width: 100%; background: #28a745;">直接登录</button>
+                        <div class="auth-hint" style="margin-top: 10px; font-size: 11px; opacity: 0.7;">
+                            注意：此模式仅在开发环境使用，生产环境请使用正常登录方式。
                         </div>
                     </div>
                 </div>
@@ -224,6 +240,8 @@
     <script src="supervisor-controller.js"></script>
     <script src="audio-recorder.js"></script>
     <script src="sound-effects.js"></script>
+    <script src="game-review.js"></script>
+    <script src="advanced-review.js"></script>
     <script>
         window.addEventListener('load', () => {
             if (!window.CARD_DATA || !window.globalState) {
@@ -254,6 +272,7 @@
 
             function openAuthModal() { authModal.style.display = 'block'; }
             function closeAuthModal() { authModal.style.display = 'none'; }
+            window.openAuthModal = openAuthModal;
 
             async function api(path, { method='GET', body=null } = {}) {
                 const headers = { 'Content-Type': 'application/json' };
@@ -272,7 +291,8 @@
                 if (loggedIn) {
                     loginBtn.classList.add('hidden');
                     userBadge.classList.remove('hidden');
-                    userName.textContent = authState.user?.username ? `Hi, ${authState.user.username}` : '已登录';
+                    const displayName = authState.user?.guardianName || authState.user?.username || '守望师';
+                    userName.textContent = `Hi, ${displayName}`;
                     newGameBtn.disabled = false;
                     newGameBtn.title = '';
                 } else {
@@ -298,6 +318,11 @@
                     authState.token = null;
                     authState.user = null;
                     localStorage.removeItem('WQT_AUTH_TOKEN');
+                if (window.GameReview && window.GameReview.setSessionId) {
+                    window.GameReview.setSessionId(null);
+                }
+                activeSessionId = null;
+                hasFinishedSession = false;
                     setAuthUI(false);
                 }
             }
@@ -320,8 +345,10 @@
             // 登录 tab 切换
             const tabDirect = document.getElementById('tab-direct');
             const tabWechat = document.getElementById('tab-wechat');
+            const tabDev = document.getElementById('tab-dev');
             const panelDirect = document.getElementById('panel-direct');
             const panelWechat = document.getElementById('panel-wechat');
+            const panelDev = document.getElementById('panel-dev');
 
             const loginForm = document.getElementById('login-form');
             const phoneInput = document.getElementById('login-phone');
@@ -332,16 +359,24 @@
             let smsCountdownLeft = 0;
 
             function activateTab(which) {
+                // 重置所有标签页
+                [tabDirect, tabWechat, tabDev].forEach(tab => tab.classList.remove('active'));
+                [panelDirect, panelWechat, panelDev].forEach(panel => panel.classList.add('hidden'));
+                
                 if (which === 'direct') {
-                    tabDirect.classList.add('active'); tabWechat.classList.remove('active');
-                    panelDirect.classList.remove('hidden'); panelWechat.classList.add('hidden');
-                } else {
-                    tabWechat.classList.add('active'); tabDirect.classList.remove('active');
-                    panelWechat.classList.remove('hidden'); panelDirect.classList.add('hidden');
+                    tabDirect.classList.add('active');
+                    panelDirect.classList.remove('hidden');
+                } else if (which === 'wechat') {
+                    tabWechat.classList.add('active');
+                    panelWechat.classList.remove('hidden');
+                } else if (which === 'dev') {
+                    tabDev.classList.add('active');
+                    panelDev.classList.remove('hidden');
                 }
             }
             tabDirect.onclick = () => activateTab('direct');
             tabWechat.onclick = () => activateTab('wechat');
+            tabDev.onclick = () => activateTab('dev');
 
             function updateSmsCountdownUI() {
                 if (smsCountdownLeft > 0) {
@@ -394,10 +429,54 @@
                     authState.token = ret.token;
                     authState.user = ret.user;
                     localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
+                    
+                    // 检查是否为新用户
+                    if (ret.user.isNewUser) {
+                        // 新用户需要完善资料
+                        closeAuthModal();
+                        window.location.href = '/complete-profile.html';
+                        return;
+                    }
+                    
                     setAuthUI(true);
                     closeAuthModal();
+                    alert(`欢迎回来，${ret.user.guardianName || '守望师'}!`);
                 } catch (err) {
                     alert('登录失败：' + err.message);
+                }
+            };
+
+            // 开发者模式登录
+            const devUsernameInput = document.getElementById('dev-username');
+            const devLoginBtn = document.getElementById('dev-login-btn');
+            
+            devLoginBtn.onclick = async () => {
+                const username = devUsernameInput.value.trim() || 'dev_user';
+                try {
+                    // 先尝试注册（如果用户不存在）
+                    try {
+                        await api('/api/auth/register', { 
+                            method: 'POST', 
+                            body: { username, password: 'dev123456' } 
+                        });
+                    } catch (e) {
+                        // 如果注册失败（可能用户已存在），就直接登录
+                    }
+                    
+                    // 登录
+                    const ret = await api('/api/auth/login', { 
+                        method: 'POST', 
+                        body: { username, password: 'dev123456' } 
+                    });
+                    
+                    authState.token = ret.token;
+                    authState.user = ret.user;
+                    localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
+                    setAuthUI(true);
+                    closeAuthModal();
+                    alert('开发者模式登录成功！');
+                } catch (err) {
+                    alert('开发者模式登录失败：' + err.message);
                 }
             };
 
@@ -457,6 +536,22 @@
                 startTime: new Date(),
                 endTime: null
             };
+            let activeSessionId = null;
+            let hasFinishedSession = false;
+            const cardTimeMarks = {};
+
+            function finalizeSession(result) {
+                if (hasFinishedSession) return;
+                const finalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
+                hasFinishedSession = true;
+                if (window.GameReview && window.GameReview.finishSession) {
+                    window.GameReview.finishSession({
+                        finalScore,
+                        endedAt: Date.now(),
+                        payload: { result }
+                    });
+                }
+            }
             
             // 数智技能按钮逼辑
             document.querySelectorAll('.skill-btn').forEach(btn => {
@@ -495,6 +590,14 @@
                             timestamp: new Date(),
                             optionD: optionD
                         });
+                        if (window.GameReview && window.GameReview.recordEvent) {
+                            window.GameReview.recordEvent('skill_use', {
+                                skill,
+                                cardId: cardNum,
+                                optionD
+                            });
+                        }
+
                         
                         document.getElementById('progress-display').innerHTML = `<p>创心力数智技能已使用！创心力 +1</p>`;
                     } else if (skill === '安全力') {
@@ -530,6 +633,13 @@
                             timestamp: new Date(),
                             rescued: lowAttrs.map(([k, _]) => k)
                         });
+                        if (window.GameReview && window.GameReview.recordEvent) {
+                            window.GameReview.recordEvent('skill_use', {
+                                skill,
+                                rescued: lowAttrs.map(([k, _]) => k)
+                            });
+                        }
+
                     } else {
                         // 其他技能：属性+1
                         window.globalState.updateAttribute(skill, window.globalState.state.attributes[skill] + 1);
@@ -543,6 +653,12 @@
                             skill: skill,
                             timestamp: new Date()
                         });
+                        if (window.GameReview && window.GameReview.recordEvent) {
+                            window.GameReview.recordEvent('skill_use', {
+                                skill
+                            });
+                        }
+
                     }
                 };
             });
@@ -568,6 +684,13 @@
                 if (!card) {
                     alert('卡牌编号不存在');
                     return;
+                }
+                cardTimeMarks[cardNum] = Date.now();
+                if (window.GameReview && window.GameReview.recordEvent) {
+                    window.GameReview.recordEvent('card_view', {
+                        cardId: parseInt(cardNum, 10),
+                        ts: Date.now()
+                    });
                 }
                 document.getElementById('modal-body').innerHTML = `
                     <h3>卡牌 ${cardNum} - ${card.safetyType}</h3>
@@ -609,7 +732,9 @@
                         const option = card.options[selectedChoice];
                         
                         // 更新属性
+                        const attrsBefore = window.globalState.getAttributes();
                         window.globalState.updateAttributes(option.attributeEffects);
+                        const attrsAfter = window.globalState.getAttributes();
                         
                         // 检查阶段变化
                         const oldPhase = window.globalState.state.currentPhase;
@@ -625,8 +750,7 @@
                         document.getElementById('stage-failures').textContent = `阶段失败: ${window.globalState.state.stageFailures}/3`;
                         
                         // 检查是否有属性归零
-                        const attrs = window.globalState.getAttributes();
-                        const hasZero = Object.values(attrs).some(v => v === 0);
+                        const hasZero = Object.values(attrsAfter).some(v => v === 0);
                         
                         if (hasZero) {
                             window.globalState.state.stageFailures++;
@@ -634,6 +758,7 @@
                             
                             if (window.globalState.state.stageFailures >= 3) {
                                 if (timerInterval) clearInterval(timerInterval);
+                                finalizeSession('failure');
                                 playSound('failure'); // 播放失败声效
                                 document.getElementById('progress-display').innerHTML = `
                                     <div style="color: #dc3545; text-align: center; padding: 20px;">
@@ -662,6 +787,7 @@
                             // 检查是否通关（完成15张卡牌且未完全失败）
                             if (window.globalState.state.cardsCompleted >= 15 && window.globalState.state.stageFailures < 3) {
                                 if (timerInterval) clearInterval(timerInterval);
+                                finalizeSession('success');
                                 playSound('success'); // 播放通关成功声效
                                 const totalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
                                 document.getElementById('progress-display').innerHTML = `
@@ -690,10 +816,29 @@
                             cardData: card,
                             optionData: option,
                             timestamp: new Date(),
-                            attributesBefore: {...attrs},
-                            attributesAfter: {...window.globalState.getAttributes()},
+                            attributesBefore: { ...attrsBefore },
+                            attributesAfter: { ...attrsAfter },
                             wasFailure: hasZero
                         };
+                        const timeStart = cardTimeMarks[cardNum];
+                        const timeSpentSec = timeStart ? Math.round((Date.now() - timeStart) / 1000) : null;
+                        if (timeStart) delete cardTimeMarks[cardNum];
+                        if (window.GameReview && window.GameReview.recordEvent) {
+                            window.GameReview.recordEvent('card_choice', {
+                                cardId: parseInt(cardNum, 10),
+                                phase: card.phase,
+                                eventText: card.event,
+                                choice: selectedChoice,
+                                optionText: option.text,
+                                consequence: option.consequence,
+                                attributeDelta: option.attributeEffects,
+                                attributesBefore: historyEntry.attributesBefore,
+                                attributesAfter: historyEntry.attributesAfter,
+                                wasFailure: hasZero,
+                                timeSpentSec
+                            });
+                        }
+
                         
                         window.globalState.addHistoryEntry(historyEntry);
                         
@@ -746,6 +891,7 @@
                                 updateTimer();
                                 if (gameTime <= 0) {
                                     clearInterval(timerInterval);
+                                    finalizeSession('timeout');
                                     document.getElementById('progress-display').innerHTML = `
                                         <div style="color: #dc3545; text-align: center; padding: 20px;">
                                             <h4>⏰ 时间到！游戏结束！</h4>
@@ -768,9 +914,24 @@
                     return;
                 }
                 // 可选：记录一次“开始新游戏”到后台
-                try { await api('/api/game/start', { method:'POST', body:{ ts: Date.now() } }); } catch (_) {}
-
-                hasStartedNewGame = true; // 标记已开始新游戏
+                hasFinishedSession = false;
+                Object.keys(cardTimeMarks).forEach(key => delete cardTimeMarks[key]);
+                try {
+                    const startRet = await api('/api/game/start', { method:'POST', body:{ ts: Date.now() } });
+                    activeSessionId = startRet?.sessionId || null;
+                    if (window.GameReview && window.GameReview.setSessionId) {
+                        window.GameReview.setSessionId(activeSessionId);
+                    }
+                    if (window.GameReview && window.GameReview.recordEvent && activeSessionId) {
+                        window.GameReview.recordEvent('game_start', { ts: Date.now() });
+                    }
+                } catch (_) {
+                    activeSessionId = null;
+                    if (window.GameReview && window.GameReview.setSessionId) {
+                        window.GameReview.setSessionId(null);
+                    }
+                }
+hasStartedNewGame = true; // 标记已开始新游戏
                 window.globalState.startNewGame();
                 if (timerInterval) clearInterval(timerInterval);
                 const inputValue = parseInt(document.getElementById('timer-input').value);
@@ -822,139 +983,17 @@
                 document.getElementById('pause-game').textContent = isPaused ? '继续' : '暂停';
             };
             
-            document.getElementById('review-history').onclick = async () => {
-                gameAnalytics.endTime = new Date();
-                const analysis = generateGameAnalysis();
-                
-                let analysisHtml = '<div style="max-height: 400px; overflow-y: auto;"><h4>游戏复盘分析</h4>';
-                analysisHtml += `<p><strong>游戏时长:</strong> ${Math.round((gameAnalytics.endTime - gameAnalytics.startTime) / 60000)}分钟</p>`;
-                analysisHtml += `<p><strong>完成卡牌:</strong> ${analysis.cardsCompleted}/15</p>`;
-                analysisHtml += `<p><strong>失败次数:</strong> ${analysis.totalFailures}</p>`;
-                
-                if (analysis.skillsByPhase.length > 0) {
-                    analysisHtml += '<h5>技能使用情况:</h5>';
-                    analysis.skillsByPhase.forEach(s => {
-                        analysisHtml += `<div>${s.skill} - 卡牌${s.cardId || '未知'}</div>`;
-                    });
-                }
-                
-                if (Object.keys(creativeOptions).length > 0) {
-                    analysisHtml += '<h5>创心力选项D:</h5>';
-                    Object.entries(creativeOptions).forEach(([cardId, optionD]) => {
-                        analysisHtml += `<div>卡牌${cardId}: ${optionD}</div>`;
-                    });
-                }
-                
-                if (analysis.attributeTrends.length > 0) {
-                    analysisHtml += '<h5>伍力值变化趋势:</h5>';
-                    analysis.attributeTrends.forEach(trend => {
-                        analysisHtml += `<div>${trend.attribute}: ${trend.change > 0 ? '+' : ''}${trend.change}</div>`;
-                    });
-                }
-                
-                analysisHtml += '<button onclick="generateLifeStory()" style="margin-top: 15px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer;">生成人生故事</button>';
-                analysisHtml += '</div>';
-                
-                document.getElementById('choice-display').innerHTML = analysisHtml;
-            };
-            
-            function generateGameAnalysis() {
-                const history = window.globalState.state.gameHistory;
-                const totalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
-                
-                return {
-                    cardsCompleted: history.length,
-                    totalFailures: gameAnalytics.failures.length,
-                    skillsByPhase: gameAnalytics.skillUsage,
-                    attributeTrends: Object.keys(window.globalState.getAttributes()).map(attr => {
-                        const initial = 3;
-                        const current = window.globalState.getAttributes()[attr];
-                        return { attribute: attr, change: current - initial };
-                    }),
-                    finalScore: totalScore,
-                    gameTime: gameAnalytics.endTime - gameAnalytics.startTime
-                };
-            }
-            
-            window.generateLifeStory = async () => {
-                const analysis = generateGameAnalysis();
-                const storyData = {
-                    cardsPlayed: gameAnalytics.cardsPlayed,
-                    skillUsage: gameAnalytics.skillUsage,
-                    failures: gameAnalytics.failures,
-                    creativeOptions: creativeOptions,
-                    finalAttributes: window.globalState.getAttributes(),
-                    totalScore: analysis.finalScore
-                };
-                
-                try {
-                    document.getElementById('choice-display').innerHTML = '<p>正在生成人生故事...</p>';
-                    
-                    // 调用LLM API生成故事
-                    const story = await callLLMAPI(storyData);
-                    
-                    const storyHtml = `
-                        <div style="max-height: 400px; overflow-y: auto; line-height: 1.8; font-size: 14px;">
-                            <h4>🌈 我的AI人生故事</h4>
-                            <div style="white-space: pre-wrap; margin: 15px 0;">${story}</div>
-                            <button onclick="downloadStory('${story.replace(/'/g, "\\'").replace(/\n/g, '\\n')}')" 
-                                    style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                                💾 下载故事
-                            </button>
-                        </div>
-                    `;
-                    
-                    document.getElementById('choice-display').innerHTML = storyHtml;
-                } catch (error) {
-                    document.getElementById('choice-display').innerHTML = `<p>生成故事失败: ${error.message}</p>`;
+            document.getElementById('review-history').onclick = () => {
+                if (window.GameReview && window.GameReview.openReview) {
+                    window.GameReview.openReview();
+                } else if (window.generateAdvancedReport) {
+                    window.generateAdvancedReport();
+                } else {
+                    document.getElementById('choice-display').innerHTML = '<p>复盘功能正在加载...</p>';
                 }
             };
             
-            async function callLLMAPI(storyData) {
-                const creativeOptionsText = Object.keys(storyData.creativeOptions).length > 0 
-                    ? `
-- 创心选项: ${Object.entries(storyData.creativeOptions).map(([cardId, option]) => `卡牌${cardId}(${option})`).join(', ')}`
-                    : '';
-
-                const prompt = `请根据以下游戏数据，用杨红樱的儿童书风格写一个温馨的小伍在AI时代的5000天里的数智素养成长故事：
-
-游戏数据：
-- 完成卡牌数量: ${storyData.cardsPlayed.length}/15
-- 数智技能使用: ${storyData.skillUsage.length}次
-- 遇到挫折: ${storyData.failures.length}次
-- 最终得分: ${storyData.totalScore}/50
-- 游戏时长: ${Math.round((gameAnalytics.endTime - gameAnalytics.startTime) / 60000)}分钟
-- 创心力技能所创造的选项D：${creativeOptionsText}
-
-请用杨红樱的温馨、充满童真的风格，写一个详细的成长故事。故事中要体现小主人公在AI世界的成长历程，包括面对数字世界的多重挑战（身体/心理/社交/经济/数字权益风险）、使用数智技能获取伍力免疫力能量等经历。语言要简单易懂、充满想象力和正能量。
-【写作要求】
-- 像儿童书一样：表达情绪、动作、对话、童真视角
-- 富有创造力和同情力，每个阶段写成一个小型冒险
-- 结尾给一句温柔的启发（不要像老师，更像大朋友）
-- 禁止出现专业词汇（如得分、技能、系统、卡牌）`;
-
-                try {
-                    // 重要：把 LLM Key 放到后端（/api/llm/story），不要在浏览器里暴露
-                    const ret = await api('/api/llm/story', { method:'POST', body:{ prompt } });
-                    return ret.story;
-                } catch (error) {
-                    console.error('LLM调用错误:', error);
-                    throw new Error('无法连接到AI服务，请检查后台服务是否启动');
-                }
-            }
-            
-            window.downloadStory = (story) => {
-                const blob = new Blob([story], { type: 'text/plain;charset=utf-8' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `AI人生故事_${new Date().toISOString().slice(0,10)}.txt`;
-                a.click();
-                URL.revokeObjectURL(url);
-            };
-            
-            // 模式切换
-            document.querySelectorAll('.mode-btn').forEach(btn => {
+document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.onclick = () => {
                     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');

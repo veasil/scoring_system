@@ -7,13 +7,19 @@ import bcrypt from "bcryptjs";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
-import { initDb, dbRun, dbGet, dbAll } from "./src/db.js";
+import { initDb, dbRun, dbGet, dbAll, saveSmsCode, verifySmsCode, addGameEvent, getGameEvents } from "./src/db.js";
+import { BmobSMS } from "./src/bmob.js";
 
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT || 80);
+const PORT = Number(process.env.PORT || 8080);
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+
+// 初始化Bmob短信服务
+const bmobSMS = process.env.BMOB_APP_ID && process.env.BMOB_REST_KEY 
+  ? new BmobSMS(process.env.BMOB_APP_ID, process.env.BMOB_REST_KEY)
+  : null;
 
 await initDb();
 
@@ -63,6 +69,34 @@ async function authMiddleware(req, res, next) {
   }
 }
 
+// ======== API: 数据库测试 ========
+app.get("/api/db/test", async (req, res) => {
+  try {
+    // 测试数据库连接
+    const userCount = await dbGet("SELECT COUNT(*) as count FROM users");
+    const sessionCount = await dbGet("SELECT COUNT(*) as count FROM game_sessions");
+    const eventCount = await dbGet("SELECT COUNT(*) as count FROM game_events");
+    
+    res.json({
+      ok: true,
+      database: {
+        connected: true,
+        tables: {
+          users: userCount.count,
+          game_sessions: sessionCount.count,
+          game_events: eventCount.count
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      error: error.message,
+      database: { connected: false }
+    });
+  }
+});
+
 // ======== API: auth ========
 app.post("/api/auth/register", async (req, res) => {
   const { username, password } = req.body || {};
@@ -94,25 +128,47 @@ app.post("/api/auth/login", async (req, res) => {
   res.json({ user: { id: user.id, username: user.username }, token });
 });
 
-// ======== API: SMS mock login ========
+// ======== API: SMS login ========
 app.post("/api/auth/sms/send", async (req, res) => {
   const phone = normalizePhone(req.body?.phone || req.body?.mobile);
   if (!phone) return res.status(400).json({ error: "缺少手机号" });
   if (phone.length < 6) return res.status(400).json({ error: "手机号格式不正确" });
 
-  const now = Date.now();
-  const existing = smsStore.get(phone);
-  if (existing && now - existing.lastSent < SMS_RESEND_INTERVAL_MS) {
-    const waitSec = Math.ceil((SMS_RESEND_INTERVAL_MS - (now - existing.lastSent)) / 1000);
-    return res.status(429).json({ error: `发送过于频繁，请${waitSec}秒后重试` });
+  // 开发环境：直接返回模拟验证码
+  if (!bmobSMS) {
+    const mockCode = generateSmsCode();
+    const now = Date.now();
+    const expiresAt = now + SMS_CODE_TTL_MS;
+    
+    // 检查发送间隔
+    const existing = smsStore.get(phone);
+    if (existing && (now - existing.lastSent) < SMS_RESEND_INTERVAL_MS) {
+      const waitSec = Math.ceil((SMS_RESEND_INTERVAL_MS - (now - existing.lastSent)) / 1000);
+      return res.status(429).json({ error: `请等待 ${waitSec} 秒后重试` });
+    }
+    
+    smsStore.set(phone, {
+      code: mockCode,
+      expiresAt,
+      lastSent: now
+    });
+    
+    console.log(`📱 模拟短信验证码 [${phone}]: ${mockCode}`);
+    
+    return res.json({ 
+      ok: true, 
+      mockCode, // 开发环境直接返回验证码
+      expiresInSeconds: Math.floor(SMS_CODE_TTL_MS / 1000),
+      message: "开发环境模拟短信已发送" 
+    });
   }
 
-  const code = generateSmsCode();
-  smsStore.set(phone, { code, expiresAt: now + SMS_CODE_TTL_MS, lastSent: now });
-  console.log(`[sms-mock] phone=${phone} code=${code}`);
-
-  // mockCode 仅供本地调试使用；真实环境应改为调用短信服务商接口
-  res.json({ ok: true, mockCode: code, expiresInSeconds: Math.floor(SMS_CODE_TTL_MS / 1000) });
+  try {
+    const result = await bmobSMS.sendSmsCode(phone);
+    res.json({ ok: true, smsId: result.smsId });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.post("/api/auth/sms/verify", async (req, res) => {
@@ -120,31 +176,124 @@ app.post("/api/auth/sms/verify", async (req, res) => {
   const code = String(req.body?.code || "").trim();
   if (!phone || !code) return res.status(400).json({ error: "手机号或验证码缺失" });
 
-  const record = smsStore.get(phone);
-  if (!record) return res.status(400).json({ error: "请先获取验证码" });
-  const now = Date.now();
-  if (now > record.expiresAt) {
+  // 开发环境：使用本地存储验证
+  if (!bmobSMS) {
+    const stored = smsStore.get(phone);
+    if (!stored) {
+      return res.status(400).json({ error: "验证码不存在或已过期" });
+    }
+    
+    if (Date.now() > stored.expiresAt) {
+      smsStore.delete(phone);
+      return res.status(400).json({ error: "验证码已过期" });
+    }
+    
+    if (stored.code !== code) {
+      return res.status(400).json({ error: "验证码错误" });
+    }
+    
+    // 验证成功，删除验证码
     smsStore.delete(phone);
-    return res.status(400).json({ error: "验证码已过期" });
-  }
-  if (record.code !== code) return res.status(400).json({ error: "验证码错误" });
+    
+    // 检查用户是否存在
+    let user = await dbGet("SELECT id, phone, guardian_name FROM users WHERE phone = ?", [phone]);
+    if (!user) {
+      // 新用户，创建记录
+      const r = await dbRun("INSERT INTO users(phone) VALUES(?)", [phone]);
+      user = { id: r.lastID, phone, guardian_name: null };
+    }
 
-  let user = await dbGet("SELECT id, username FROM users WHERE username = ?", [phone]);
-  if (!user) {
-    const r = await dbRun("INSERT INTO users(username) VALUES(?)", [phone]);
-    user = { id: r.lastID, username: phone };
+    const token = signToken({ id: user.id, username: user.phone });
+    return res.json({ 
+      user: { 
+        id: user.id, 
+        username: user.phone, 
+        guardianName: user.guardian_name,
+        isNewUser: !user.guardian_name
+      }, 
+      token 
+    });
   }
 
-  const token = signToken(user);
-  smsStore.delete(phone);
-  res.json({ user, token });
+  try {
+    await bmobSMS.verifySmsCode(phone, code);
+    
+    // Bmob 验证成功，检查用户是否存在
+    let user = await dbGet("SELECT id, phone, guardian_name FROM users WHERE phone = ?", [phone]);
+    if (!user) {
+      // 新用户，创建记录
+      const r = await dbRun("INSERT INTO users(phone) VALUES(?)", [phone]);
+      user = { id: r.lastID, phone, guardian_name: null };
+    }
+
+    const token = signToken({ id: user.id, username: user.phone });
+    res.json({ 
+      user: { 
+        id: user.id, 
+        username: user.phone, 
+        guardianName: user.guardian_name,
+        isNewUser: !user.guardian_name
+      }, 
+      token 
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 // 前端会调用，但我们这里不维护 server-side session，所以直接返回 ok
 app.post("/api/auth/logout", async (_req, res) => res.json({ ok: true }));
 
 app.get("/api/me", authMiddleware, async (req, res) => {
-  res.json({ user: { id: req.user.uid, username: req.user.username } });
+  const user = await dbGet("SELECT id, username, phone, guardian_name FROM users WHERE id = ?", [req.user.uid]);
+  if (!user) return res.status(404).json({ error: "用户不存在" });
+  
+  res.json({ 
+    user: { 
+      id: user.id, 
+      username: user.username || user.phone, 
+      phone: user.phone,
+      guardianName: user.guardian_name,
+      isProfileComplete: !!user.guardian_name
+    } 
+  });
+});
+
+// 完善用户资料
+app.post("/api/auth/complete-profile", authMiddleware, async (req, res) => {
+  const { guardianName, wechatOpenid } = req.body || {};
+  if (!guardianName || String(guardianName).trim().length < 1) {
+    return res.status(400).json({ error: "请输入守望师名字" });
+  }
+
+  const userId = req.user.uid;
+  const updateFields = ["guardian_name = ?"];
+  const updateValues = [String(guardianName).trim()];
+  
+  // 如果提供了微信openid，也一起更新
+  if (wechatOpenid && String(wechatOpenid).trim()) {
+    updateFields.push("wechat_openid = ?");
+    updateValues.push(String(wechatOpenid).trim());
+  }
+  
+  updateValues.push(userId);
+  
+  await dbRun(
+    `UPDATE users SET ${updateFields.join(", ")} WHERE id = ?`,
+    updateValues
+  );
+
+  const user = await dbGet("SELECT id, username, phone, guardian_name, wechat_openid FROM users WHERE id = ?", [userId]);
+  res.json({ 
+    user: { 
+      id: user.id, 
+      username: user.username || user.phone,
+      phone: user.phone,
+      guardianName: user.guardian_name,
+      wechatOpenid: user.wechat_openid,
+      isProfileComplete: true
+    } 
+  });
 });
 
 // ======== API: game ========
@@ -168,6 +317,39 @@ app.post("/api/game/finish", authMiddleware, async (req, res) => {
   res.json({ ok: true });
 });
 
+app.post("/api/game/event", authMiddleware, async (req, res) => {
+  const userId = req.user.uid;
+  const { sessionId, type, payload } = req.body || {};
+  if (!sessionId || !type) return res.status(400).json({ error: "ç¼ºå°‘ sessionId æˆ– type" });
+
+  const session = await dbGet("SELECT id FROM game_sessions WHERE id = ? AND user_id = ?", [sessionId, userId]);
+  if (!session) return res.status(404).json({ error: "æ¸¸æˆä¸å­˜åœ¨" });
+
+  await addGameEvent(sessionId, String(type), payload || {});
+  res.json({ ok: true });
+});
+
+app.get("/api/game/last-session", authMiddleware, async (req, res) => {
+  const userId = req.user.uid;
+  const session = await dbGet(
+    "SELECT * FROM game_sessions WHERE user_id = ? ORDER BY started_at DESC LIMIT 1",
+    [userId]
+  );
+  res.json({ session: session || null });
+});
+
+app.get("/api/game/session/:id", authMiddleware, async (req, res) => {
+  const userId = req.user.uid;
+  const sessionId = Number(req.params.id);
+  if (!sessionId) return res.status(400).json({ error: "sessionId ä¸æ­£ç¡®" });
+
+  const session = await dbGet("SELECT * FROM game_sessions WHERE id = ? AND user_id = ?", [sessionId, userId]);
+  if (!session) return res.status(404).json({ error: "æ¸¸æˆä¸å­˜åœ¨" });
+
+  const events = await getGameEvents(sessionId);
+  res.json({ session, events });
+});
+
 // ======== API: LLM proxy（可选） ========
 // 你原 index.html 里把 Key 写死在前端了（非常危险），这里提供一个安全的后端代理。
 app.post("/api/llm/story", authMiddleware, async (req, res) => {
@@ -177,7 +359,11 @@ app.post("/api/llm/story", authMiddleware, async (req, res) => {
   const apiKey = process.env.DEEPSEEK_API_KEY;
   if (!apiKey) return res.status(400).json({ error: "后端未配置 DEEPSEEK_API_KEY" });
 
-  const model = process.env.DEEPSEEK_MODEL || "deepseek-reasoner";
+  const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+  const rawMaxTokens = Number(req.body?.max_tokens);
+  const maxTokens = Number.isFinite(rawMaxTokens) ? Math.min(Math.max(rawMaxTokens, 200), 2400) : 1200;
+  const rawTemperature = Number(req.body?.temperature);
+  const temperature = Number.isFinite(rawTemperature) ? Math.min(Math.max(rawTemperature, 0), 1.2) : 0.7;
 
   try {
     const r = await fetch("https://api.deepseek.com/chat/completions", {
@@ -189,8 +375,8 @@ app.post("/api/llm/story", authMiddleware, async (req, res) => {
       body: JSON.stringify({
         model,
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 800,
-        temperature: 0.7
+        max_tokens: maxTokens,
+        temperature
       })
     });
 
@@ -230,8 +416,8 @@ app.get("/api/auth/wechat/poll", async (_req, res) => {
 });
 
 // ======== Start ========
-const HOST = process.env.HOST || '0.0.0.0';
+const HOST = process.env.HOST || 'localhost';
 app.listen(PORT, HOST, () => {
   console.log(`✅ Server running on http://${HOST}:${PORT}`);
-  console.log(`🌐 Local access: http://localhost:${PORT}`);
+  console.log(`🌐 Alternative access: http://127.0.0.1:${PORT}`);
 });

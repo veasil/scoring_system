@@ -2,3 +2,6 @@ node_modules
 .env
 dist
 build
+wqt.db
+app.db
+app.sqlite
