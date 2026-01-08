@@ -412,6 +412,26 @@ app.sqlite      # SQLite文件
 - ❌ `.env` - 环境变量（包含敏感信息）
 - ❌ `wqt.db` - 数据库文件（本地数据）
 
+#### ⚠️ 重要安全提醒
+如果你发现 `.env` 文件已经被提交到 GitHub，需要立即移除：
+```bash
+# 从Git跟踪中移除.env文件（保留本地文件）
+git rm --cached .env
+
+# 提交这个更改
+git commit -m "security: 从版本控制中移除.env文件"
+
+# 推送到远程仓库
+git push
+
+# 确保.gitignore包含.env
+echo ".env" >> .gitignore
+```
+
+**注意**：即使从Git中移除了 `.env` 文件，GitHub的历史记录中仍然可能包含敏感信息。如果 `.env` 中包含重要的API密钥，建议：
+1. 立即更换所有暴露的API密钥
+2. 考虑使用 `git filter-branch` 或 BFG Repo-Cleaner 清理历史记录
+
 ### 部署建议
 
 #### 本地开发
