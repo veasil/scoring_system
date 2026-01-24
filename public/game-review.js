@@ -99,7 +99,22 @@
         attributesBefore: before,
         attributesAfter: after,
         wasFailure: Boolean(payload.wasFailure),
+        isCreativeOption: Boolean(payload.isCreativeOption),
         ts: ev.ts || null
+      };
+    });
+
+    const skills = skillEvents.map((ev) => {
+      const payload = ev.payload || {};
+      return {
+        ts: ev.ts || null,
+        skill: payload.skill || "",
+        cardId: payload.cardId || null,
+        optionD: payload.optionD || "",
+        rescued: payload.rescued || [],
+        attributeChange: payload.attributeChange || {},
+        attributesBefore: payload.attributesBefore || {},
+        attributesAfter: payload.attributesAfter || {}
       };
     });
 
@@ -121,12 +136,7 @@
         finalScore
       },
       cards,
-      skills: skillEvents.map((ev) => ({
-        ts: ev.ts || null,
-        skill: ev.payload?.skill || "",
-        cardId: ev.payload?.cardId || null,
-        optionD: ev.payload?.optionD || ""
-      })),
+      skills,
       durationMs
     };
   }
@@ -147,9 +157,17 @@
         consequence: card.consequence,
         delta: card.attributeDelta,
         timeSpentSec: card.timeSpentSec,
-        wasFailure: card.wasFailure
+        wasFailure: card.wasFailure,
+        isCreativeOption: card.isCreativeOption
       })),
-      skills: data.skills
+      skills: data.skills.map((skill) => ({
+        skill: skill.skill,
+        cardId: skill.cardId,
+        optionD: skill.optionD,
+        rescued: skill.rescued,
+        attributeChange: skill.attributeChange,
+        scoreChange: Object.values(skill.attributeChange || {}).reduce((sum, val) => sum + val, 0)
+      }))
     };
 
     return [
@@ -160,7 +178,7 @@
       "```json",
       "{",
       '  "keyMoments": [',
-      '    {"type": "breakthrough|setback|turning_point", "cardId": 数字, "impact": 数字, "description": "描述"}',
+      '    {"type": "breakthrough|setback|turning_point|skill_use", "cardId": 数字, "impact": 数字, "description": "描述"}',
       "  ],",
       '  "decisionPatterns": [',
       '    {"pattern": "模式名称", "frequency": 数字, "description": "描述"}',
@@ -175,10 +193,11 @@
       "```",
       "",
       "分析要点：",
-      "- keyMoments: 关键转折点（得分大幅变化、失败、突破等）",
-      "- decisionPatterns: 决策模式（选择倾向、反应时间等）",
-      "- growthHighlights: 成长亮点（技能使用、创新选择等）",
+      "- keyMoments: 关键转折点（得分大幅变化、失败、突破、技能使用等）",
+      "- decisionPatterns: 决策模式（选择倾向、反应时间、技能使用策略等）",
+      "- growthHighlights: 成长亮点（技能使用、创新选择、属性提升等）",
       "- reflectionPoints: 值得反思的点（可改进之处、学习机会等）",
+
       "",
       "游戏数据：",
       "```json",

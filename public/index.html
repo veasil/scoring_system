@@ -574,8 +574,11 @@
                         const optionD = prompt('请填写你的选项D：');
                         if (optionD === null) return; // 用户取消
                         
-                        // 创心力技能：属性+1，但不跳过选择
+                        // 创心力技能：属性+1
+                        const attrsBefore = { ...window.globalState.getAttributes() };
                         window.globalState.updateAttribute(skill, window.globalState.state.attributes[skill] + 1);
+                        const attrsAfter = { ...window.globalState.getAttributes() };
+                        
                         skillsUsed[skill] = true;
                         checkbox.checked = true;
                         playSound('upgrade'); // 播放升级声效
@@ -583,42 +586,177 @@
                         // 保存选项D用于复盘
                         creativeOptions[cardNum] = optionD;
                         
+                        // 记录技能使用到操作历史
+                        const skillHistoryEntry = {
+                            cardId: parseInt(cardNum),
+                            selectedOption: 'SKILL',
+                            cardData: null,
+                            optionData: { 
+                                text: `使用创心力技能，创建选项D：${optionD}`, 
+                                consequence: '创心力 +1' 
+                            },
+                            timestamp: new Date(),
+                            attributesBefore: attrsBefore,
+                            attributesAfter: attrsAfter,
+                            wasFailure: false,
+                            isSkillUse: true,
+                            skillType: '创心力',
+                            skillEffect: { '创心力': 1 }
+                        };
+                        window.globalState.addHistoryEntry(skillHistoryEntry);
+                        
                         // 记录技能使用
                         gameAnalytics.skillUsage.push({
                             skill: '创心力',
                             cardId: cardNum,
                             timestamp: new Date(),
-                            optionD: optionD
+                            optionD: optionD,
+                            attributeChange: { '创心力': 1 }
                         });
                         if (window.GameReview && window.GameReview.recordEvent) {
                             window.GameReview.recordEvent('skill_use', {
                                 skill,
                                 cardId: cardNum,
-                                optionD
+                                optionD,
+                                attributesBefore: attrsBefore,
+                                attributesAfter: attrsAfter,
+                                attributeChange: { '创心力': 1 }
                             });
                         }
 
+                        // 弹窗询问是否选择选项D
+                        const chooseD = confirm('小伍请回答是否要选择选项D？');
                         
-                        document.getElementById('progress-display').innerHTML = `<p>创心力数智技能已使用！创心力 +1</p>`;
+                        if (chooseD) {
+                            // 选择选项D，直接给出反馈，不需要再选ABC
+                            const card = window.CARD_DATA.find(c => c.id === parseInt(cardNum));
+                            if (card) {
+                                // 记录选择D的历史
+                                const historyEntry = {
+                                    cardId: parseInt(cardNum),
+                                    selectedOption: 'D',
+                                    cardData: card,
+                                    optionData: { text: optionD, consequence: '你选择了创新的解决方案！' },
+                                    timestamp: new Date(),
+                                    attributesBefore: attrsAfter, // 使用技能后的属性作为before
+                                    attributesAfter: attrsAfter,  // 选择D不再改变属性
+                                    wasFailure: false,
+                                    isCreativeOption: true,
+                                    skillUsed: '创心力'
+                                };
+                                
+                                window.globalState.addHistoryEntry(historyEntry);
+                                
+                                // 更新游戏进度
+                                window.globalState.state.cardsCompleted++;
+                                window.globalState.state.currentPhase = card.phase;
+                                document.getElementById('current-phase').textContent = `当前阶段: ${card.phase}`;
+                                document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/15`;
+                                
+                                // 记录事件
+                                if (window.GameReview && window.GameReview.recordEvent) {
+                                    window.GameReview.recordEvent('card_choice', {
+                                        cardId: parseInt(cardNum, 10),
+                                        phase: card.phase,
+                                        eventText: card.event,
+                                        choice: 'D',
+                                        optionText: optionD,
+                                        consequence: '你选择了创新的解决方案！',
+                                        attributeDelta: {},
+                                        attributesBefore: historyEntry.attributesBefore,
+                                        attributesAfter: historyEntry.attributesAfter,
+                                        wasFailure: false,
+                                        isCreativeOption: true
+                                    });
+                                }
+                                
+                                // 显示反馈
+                                document.getElementById('choice-display').innerHTML = `
+                                    <div><h4>卡牌 ${cardNum} - 选项D（创心力）</h4>
+                                    <p><strong>你的选择：</strong>${optionD}</p>
+                                    <p><strong>反馈：</strong>你选择了创新的解决方案！创心力让你找到了独特的解决方式。</p>
+                                    </div>
+                                `;
+                                
+                                // 重置输入
+                                document.getElementById('card-number').value = '';
+                                document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+                                document.getElementById('submit-choice').disabled = true;
+                                selectedChoice = null;
+                                
+                                // 检查是否通关
+                                if (window.globalState.state.cardsCompleted >= 15) {
+                                    if (timerInterval) clearInterval(timerInterval);
+                                    finalizeSession('success');
+                                    playSound('success');
+                                    const totalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
+                                    document.getElementById('progress-display').innerHTML = `
+                                        <div style="color: #52c41a; text-align: center; padding: 20px;">
+                                            <h1 style="font-size: 3.5rem; margin: 20px 0; color: #73d13d; text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">🎉 恭喜通关！</h1>
+                                            <p style="font-size: 1.2rem; margin: 15px 0;">您已成功完成所有15张卡牌！</p>
+                                            <p style="font-size: 1.4rem; margin: 15px 0;"><strong>最终总分：${totalScore}/50</strong></p>
+                                            <p style="font-size: 1.1rem; margin: 10px 0;">当前阶段：${card.phase}</p>
+                                            <p style="font-size: 1.1rem; margin: 10px 0;">阶段失败次数：${window.globalState.state.stageFailures}/3</p>
+                                            <button onclick="location.reload()" style="padding: 12px 24px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; font-size: 1.1rem;">开始新游戏</button>
+                                        </div>
+                                    `;
+                                } else {
+                                    document.getElementById('progress-display').innerHTML = `<p>创心力数智技能已使用！创心力 +1，已选择选项D</p>`;
+                                }
+                            }
+                        } else {
+                            // 不选择选项D，选项D仍然记录，但继续选择ABC
+                            document.getElementById('progress-display').innerHTML = `<p>创心力数智技能已使用！创心力 +1，选项D已记录，请继续选择ABC</p>`;
+                        }
                     } else if (skill === '安全力') {
                         // 安全力技能：检查是否有伍力值=1的，有的话+1
                         const attrs = window.globalState.getAttributes();
                         const lowAttrs = Object.entries(attrs).filter(([k, v]) => v === 1);
                         
+                        const attrsBefore = { ...attrs };
+                        
                         skillsUsed[skill] = true;
                         checkbox.checked = true;
+                        
+                        let attributeChanges = {};
+                        if (lowAttrs.length > 0) {
+                            lowAttrs.forEach(([attrName, _]) => {
+                                window.globalState.updateAttribute(attrName, 2);
+                                attributeChanges[attrName] = 1; // 从1提升到2，变化+1
+                            });
+                        }
+                        
+                        const attrsAfter = window.globalState.getAttributes();
+                        
+                        // 记录技能使用到操作历史
+                        const skillHistoryEntry = {
+                            cardId: null,
+                            selectedOption: 'SKILL',
+                            cardData: null,
+                            optionData: { 
+                                text: `使用安全力技能`, 
+                                consequence: lowAttrs.length > 0 
+                                    ? `检测到危险值，已将 ${lowAttrs.map(([k, _]) => k).join('、')} 提升至 2`
+                                    : '所有伍力值都安全，无需调整'
+                            },
+                            timestamp: new Date(),
+                            attributesBefore: attrsBefore,
+                            attributesAfter: attrsAfter,
+                            wasFailure: false,
+                            isSkillUse: true,
+                            skillType: '安全力',
+                            skillEffect: attributeChanges
+                        };
+                        window.globalState.addHistoryEntry(skillHistoryEntry);
                         
                         document.getElementById('progress-display').innerHTML = `<p>安全力数智技能已使用！</p>`;
                         
                         let choiceHtml = '<div><h4>当前伍力值情况：</h4>';
-                        Object.entries(attrs).forEach(([k, v]) => {
+                        Object.entries(attrsAfter).forEach(([k, v]) => {
                             choiceHtml += `<p>${k}: ${v}</p>`;
                         });
                         
                         if (lowAttrs.length > 0) {
-                            lowAttrs.forEach(([attrName, _]) => {
-                                window.globalState.updateAttribute(attrName, 2);
-                            });
                             choiceHtml += `<p style="color: #28a745;">检测到危险值，已将 ${lowAttrs.map(([k, _]) => k).join('、')} 提升至 2</p>`;
                         } else {
                             choiceHtml += '<p>所有伍力值都安全，无需调整</p>';
@@ -631,31 +769,62 @@
                         gameAnalytics.skillUsage.push({
                             skill: '安全力',
                             timestamp: new Date(),
-                            rescued: lowAttrs.map(([k, _]) => k)
+                            rescued: lowAttrs.map(([k, _]) => k),
+                            attributeChange: attributeChanges
                         });
                         if (window.GameReview && window.GameReview.recordEvent) {
                             window.GameReview.recordEvent('skill_use', {
                                 skill,
-                                rescued: lowAttrs.map(([k, _]) => k)
+                                rescued: lowAttrs.map(([k, _]) => k),
+                                attributesBefore: attrsBefore,
+                                attributesAfter: attrsAfter,
+                                attributeChange: attributeChanges
                             });
                         }
 
                     } else {
                         // 其他技能：属性+1
+                        const attrsBefore = { ...window.globalState.getAttributes() };
                         window.globalState.updateAttribute(skill, window.globalState.state.attributes[skill] + 1);
+                        const attrsAfter = { ...window.globalState.getAttributes() };
+                        
                         skillsUsed[skill] = true;
                         checkbox.checked = true;
                         playSound('upgrade'); // 播放升级声效
+                        
+                        // 记录技能使用到操作历史
+                        const skillHistoryEntry = {
+                            cardId: null,
+                            selectedOption: 'SKILL',
+                            cardData: null,
+                            optionData: { 
+                                text: `使用${skill}技能`, 
+                                consequence: `${skill} +1` 
+                            },
+                            timestamp: new Date(),
+                            attributesBefore: attrsBefore,
+                            attributesAfter: attrsAfter,
+                            wasFailure: false,
+                            isSkillUse: true,
+                            skillType: skill,
+                            skillEffect: { [skill]: 1 }
+                        };
+                        window.globalState.addHistoryEntry(skillHistoryEntry);
+                        
                         document.getElementById('progress-display').innerHTML = `<p>${skill}数智技能已使用！${skill} +1</p>`;
                         
                         // 记录技能使用
                         gameAnalytics.skillUsage.push({
                             skill: skill,
-                            timestamp: new Date()
+                            timestamp: new Date(),
+                            attributeChange: { [skill]: 1 }
                         });
                         if (window.GameReview && window.GameReview.recordEvent) {
                             window.GameReview.recordEvent('skill_use', {
-                                skill
+                                skill,
+                                attributesBefore: attrsBefore,
+                                attributesAfter: attrsAfter,
+                                attributeChange: { [skill]: 1 }
                             });
                         }
 
@@ -818,7 +987,8 @@
                             timestamp: new Date(),
                             attributesBefore: { ...attrsBefore },
                             attributesAfter: { ...attrsAfter },
-                            wasFailure: hasZero
+                            wasFailure: hasZero,
+                            isCreativeOption: false
                         };
                         const timeStart = cardTimeMarks[cardNum];
                         const timeSpentSec = timeStart ? Math.round((Date.now() - timeStart) / 1000) : null;
@@ -848,7 +1018,8 @@
                             phase: card.phase,
                             choice: selectedChoice,
                             attributeEffects: option.attributeEffects,
-                            timestamp: new Date()
+                            timestamp: new Date(),
+                            isCreativeOption: false
                         });
                         
                         if (hasZero) {

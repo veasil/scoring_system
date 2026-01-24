@@ -231,19 +231,65 @@ class SupervisorController {
 
         const history = this.globalState.state.gameHistory.slice(-10); // 显示最近10条
         historyElement.innerHTML = history.map(entry => {
-            const changes = entry.optionData ? 
-                Object.entries(entry.optionData.attributeEffects)
-                    .filter(([k,v]) => v !== 0)
-                    .map(([k,v]) => `${k}${v>0?'+':''}${v}`)
-                    .join(', ') || '无变化' : '无变化';
+            let changes = '无变化';
+            let content = '';
+            let eventType = '';
+            
+            if (entry.isSkillUse) {
+                // 技能使用记录
+                eventType = '技能使用';
+                content = `使用${entry.skillType}技能`;
+                
+                if (entry.skillEffect && Object.keys(entry.skillEffect).length > 0) {
+                    changes = Object.entries(entry.skillEffect)
+                        .map(([attr, value]) => `${attr}${value > 0 ? '+' : ''}${value}`)
+                        .join(', ');
+                }
+                
+                // 特殊处理创心力和安全力
+                if (entry.skillType === '创心力' && entry.optionData?.text?.includes('选项D')) {
+                    content += ' (创建选项D)';
+                } else if (entry.skillType === '安全力' && entry.optionData?.consequence?.includes('检测到危险值')) {
+                    content += ' (救援属性)';
+                }
+            } else {
+                // 卡牌选择记录
+                eventType = '卡牌选择';
+                content = `卡牌${entry.cardId} - 选项${entry.selectedOption}`;
+                
+                if (entry.selectedOption === 'D' && entry.isCreativeOption) {
+                    content += ' (创心力选项)';
+                }
+                
+                // 计算属性变化
+                if (entry.attributesBefore && entry.attributesAfter) {
+                    const changeEntries = [];
+                    Object.keys(entry.attributesBefore).forEach(attr => {
+                        const before = entry.attributesBefore[attr] || 0;
+                        const after = entry.attributesAfter[attr] || 0;
+                        const diff = after - before;
+                        if (diff !== 0) {
+                            changeEntries.push(`${attr}${diff > 0 ? '+' : ''}${diff}`);
+                        }
+                    });
+                    changes = changeEntries.length > 0 ? changeEntries.join(', ') : '无变化';
+                } else if (entry.optionData?.attributeEffects) {
+                    // 备用方案：使用attributeEffects
+                    changes = Object.entries(entry.optionData.attributeEffects)
+                        .filter(([k, v]) => v !== 0)
+                        .map(([k, v]) => `${k}${v > 0 ? '+' : ''}${v}`)
+                        .join(', ') || '无变化';
+                }
+            }
             
             return `
-                <div class="history-item">
+                <div class="history-item ${entry.isSkillUse ? 'skill-use' : 'card-choice'}">
                     <div class="history-time">${new Date(entry.timestamp).toLocaleTimeString()}</div>
                     <div class="history-content">
-                        <div>卡牌${entry.cardId} - 选项${entry.selectedOption}</div>
-                        <div class="history-event">${entry.cardData ? entry.cardData.safetyType : ''}</div>
-                        <div class="history-changes">${changes}</div>
+                        <div class="history-type">[${eventType}]</div>
+                        <div class="history-action">${content}</div>
+                        ${entry.cardData ? `<div class="history-event">${entry.cardData.safetyType}</div>` : ''}
+                        <div class="history-changes ${changes !== '无变化' ? 'has-changes' : ''}">${changes}</div>
                     </div>
                 </div>
             `;

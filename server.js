@@ -416,8 +416,8 @@ app.get("/api/auth/wechat/poll", async (_req, res) => {
 });
 
 // ======== Start ========
-const HOST = process.env.HOST || 'localhost';
+const HOST = process.env.HOST || '0.0.0.0';
 app.listen(PORT, HOST, () => {
   console.log(`✅ Server running on http://${HOST}:${PORT}`);
-  console.log(`🌐 Alternative access: http://127.0.0.1:${PORT}`);
+  console.log(`🌐 Public access via your server IP: http://127.0.0.1:${PORT}`);
 });

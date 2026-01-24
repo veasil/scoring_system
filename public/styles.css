@@ -748,6 +748,16 @@ body {
     font-size: 0.9rem;
 }
 
+.history-item.skill-use {
+    background: #e8f5e8;
+    border-left: 4px solid #28a745;
+}
+
+.history-item.card-choice {
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+}
+
 .history-time {
     color: #6c757d;
     font-size: 0.8rem;
@@ -756,6 +766,34 @@ body {
 .history-content {
     color: #495057;
     margin-top: 0.25rem;
+}
+
+.history-type {
+    font-weight: bold;
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.2rem;
+}
+
+.history-action {
+    font-weight: 500;
+    margin-bottom: 0.2rem;
+}
+
+.history-event {
+    font-size: 0.8rem;
+    color: #666;
+    margin-bottom: 0.2rem;
+}
+
+.history-changes {
+    font-size: 0.8rem;
+    color: #999;
+}
+
+.history-changes.has-changes {
+    color: #28a745;
+    font-weight: bold;
 }
 
 .history-item.supervisor-action {

@@ -98,6 +98,13 @@ class GlobalState {
 
     // 添加历史记录
     addHistoryEntry(entry) {
+        // 为技能使用记录添加特殊标识
+        if (entry.isSkillUse) {
+            entry.type = 'skill_use';
+        } else {
+            entry.type = 'card_choice';
+        }
+        
         this.state.gameHistory.push(entry);
         this.notifyListeners('historyAdded', entry);
     }
