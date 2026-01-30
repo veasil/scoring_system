@@ -17,7 +17,7 @@ const PORT = Number(process.env.PORT || 8080);
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
 // 初始化Bmob短信服务
-const bmobSMS = process.env.BMOB_APP_ID && process.env.BMOB_REST_KEY 
+const bmobSMS = process.env.BMOB_APP_ID && process.env.BMOB_REST_KEY
   ? new BmobSMS(process.env.BMOB_APP_ID, process.env.BMOB_REST_KEY)
   : null;
 
@@ -76,7 +76,7 @@ app.get("/api/db/test", async (req, res) => {
     const userCount = await dbGet("SELECT COUNT(*) as count FROM users");
     const sessionCount = await dbGet("SELECT COUNT(*) as count FROM game_sessions");
     const eventCount = await dbGet("SELECT COUNT(*) as count FROM game_events");
-    
+
     res.json({
       ok: true,
       database: {
@@ -139,27 +139,27 @@ app.post("/api/auth/sms/send", async (req, res) => {
     const mockCode = generateSmsCode();
     const now = Date.now();
     const expiresAt = now + SMS_CODE_TTL_MS;
-    
+
     // 检查发送间隔
     const existing = smsStore.get(phone);
     if (existing && (now - existing.lastSent) < SMS_RESEND_INTERVAL_MS) {
       const waitSec = Math.ceil((SMS_RESEND_INTERVAL_MS - (now - existing.lastSent)) / 1000);
       return res.status(429).json({ error: `请等待 ${waitSec} 秒后重试` });
     }
-    
+
     smsStore.set(phone, {
       code: mockCode,
       expiresAt,
       lastSent: now
     });
-    
+
     console.log(`📱 模拟短信验证码 [${phone}]: ${mockCode}`);
-    
-    return res.json({ 
-      ok: true, 
+
+    return res.json({
+      ok: true,
       mockCode, // 开发环境直接返回验证码
       expiresInSeconds: Math.floor(SMS_CODE_TTL_MS / 1000),
-      message: "开发环境模拟短信已发送" 
+      message: "开发环境模拟短信已发送"
     });
   }
 
@@ -182,19 +182,19 @@ app.post("/api/auth/sms/verify", async (req, res) => {
     if (!stored) {
       return res.status(400).json({ error: "验证码不存在或已过期" });
     }
-    
+
     if (Date.now() > stored.expiresAt) {
       smsStore.delete(phone);
       return res.status(400).json({ error: "验证码已过期" });
     }
-    
+
     if (stored.code !== code) {
       return res.status(400).json({ error: "验证码错误" });
     }
-    
+
     // 验证成功，删除验证码
     smsStore.delete(phone);
-    
+
     // 检查用户是否存在
     let user = await dbGet("SELECT id, phone, guardian_name FROM users WHERE phone = ?", [phone]);
     if (!user) {
@@ -204,20 +204,20 @@ app.post("/api/auth/sms/verify", async (req, res) => {
     }
 
     const token = signToken({ id: user.id, username: user.phone });
-    return res.json({ 
-      user: { 
-        id: user.id, 
-        username: user.phone, 
+    return res.json({
+      user: {
+        id: user.id,
+        username: user.phone,
         guardianName: user.guardian_name,
         isNewUser: !user.guardian_name
-      }, 
-      token 
+      },
+      token
     });
   }
 
   try {
     await bmobSMS.verifySmsCode(phone, code);
-    
+
     // Bmob 验证成功，检查用户是否存在
     let user = await dbGet("SELECT id, phone, guardian_name FROM users WHERE phone = ?", [phone]);
     if (!user) {
@@ -227,14 +227,14 @@ app.post("/api/auth/sms/verify", async (req, res) => {
     }
 
     const token = signToken({ id: user.id, username: user.phone });
-    res.json({ 
-      user: { 
-        id: user.id, 
-        username: user.phone, 
+    res.json({
+      user: {
+        id: user.id,
+        username: user.phone,
         guardianName: user.guardian_name,
         isNewUser: !user.guardian_name
-      }, 
-      token 
+      },
+      token
     });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -247,15 +247,15 @@ app.post("/api/auth/logout", async (_req, res) => res.json({ ok: true }));
 app.get("/api/me", authMiddleware, async (req, res) => {
   const user = await dbGet("SELECT id, username, phone, guardian_name FROM users WHERE id = ?", [req.user.uid]);
   if (!user) return res.status(404).json({ error: "用户不存在" });
-  
-  res.json({ 
-    user: { 
-      id: user.id, 
-      username: user.username || user.phone, 
+
+  res.json({
+    user: {
+      id: user.id,
+      username: user.username || user.phone,
       phone: user.phone,
       guardianName: user.guardian_name,
       isProfileComplete: !!user.guardian_name
-    } 
+    }
   });
 });
 
@@ -269,30 +269,30 @@ app.post("/api/auth/complete-profile", authMiddleware, async (req, res) => {
   const userId = req.user.uid;
   const updateFields = ["guardian_name = ?"];
   const updateValues = [String(guardianName).trim()];
-  
+
   // 如果提供了微信openid，也一起更新
   if (wechatOpenid && String(wechatOpenid).trim()) {
     updateFields.push("wechat_openid = ?");
     updateValues.push(String(wechatOpenid).trim());
   }
-  
+
   updateValues.push(userId);
-  
+
   await dbRun(
     `UPDATE users SET ${updateFields.join(", ")} WHERE id = ?`,
     updateValues
   );
 
   const user = await dbGet("SELECT id, username, phone, guardian_name, wechat_openid FROM users WHERE id = ?", [userId]);
-  res.json({ 
-    user: { 
-      id: user.id, 
+  res.json({
+    user: {
+      id: user.id,
       username: user.username || user.phone,
       phone: user.phone,
       guardianName: user.guardian_name,
       wechatOpenid: user.wechat_openid,
       isProfileComplete: true
-    } 
+    }
   });
 });
 
@@ -300,7 +300,15 @@ app.post("/api/auth/complete-profile", authMiddleware, async (req, res) => {
 app.post("/api/game/start", authMiddleware, async (req, res) => {
   const userId = req.user.uid;
   const ts = Number(req.body?.ts || Date.now());
-  const r = await dbRun("INSERT INTO game_sessions(user_id, started_at) VALUES(?, ?)", [userId, ts]);
+  const { location, players, mode, settings } = req.body || {};
+
+  const playersJson = players ? JSON.stringify(players) : null;
+  const settingsJson = settings ? JSON.stringify(settings) : null;
+
+  const r = await dbRun(
+    "INSERT INTO game_sessions(user_id, started_at, location, players_json, game_mode, game_settings_json) VALUES(?, ?, ?, ?, ?, ?)",
+    [userId, ts, location, playersJson, mode, settingsJson]
+  );
   res.json({ ok: true, sessionId: r.lastID });
 });
 

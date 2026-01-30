@@ -32,7 +32,7 @@
     let data = null;
     try {
       data = await res.json();
-    } catch (_) {}
+    } catch (_) { }
     if (!res.ok) {
       const msg = data && data.error ? data.error : `请求失败(${res.status})`;
       throw new Error(msg);
@@ -121,19 +121,30 @@
     const finalScore = Number.isFinite(session.final_score)
       ? Number(session.final_score)
       : cards.length
-      ? sumAttributes(cards[cards.length - 1].attributesAfter)
-      : 0;
+        ? sumAttributes(cards[cards.length - 1].attributesAfter)
+        : 0;
 
     const startedAt = session.started_at || (startEvent && startEvent.ts) || null;
     const endedAt = session.ended_at || (finishEvent && finishEvent.ts) || null;
     const durationMs = startedAt && endedAt ? Number(endedAt) - Number(startedAt) : null;
+
+    // Parse new fields
+    let players = null;
+    try { players = session.players_json ? JSON.parse(session.players_json) : null; } catch (_) { }
+
+    let settings = null;
+    try { settings = session.game_settings_json ? JSON.parse(session.game_settings_json) : null; } catch (_) { }
 
     return {
       session: {
         id: session.id,
         startedAt,
         endedAt,
-        finalScore
+        finalScore,
+        location: session.location,
+        players,
+        mode: session.game_mode,
+        settings
       },
       cards,
       skills,
@@ -144,6 +155,9 @@
   function buildExtractPrompt(data) {
     const payload = {
       sessionId: data.session.id,
+      location: data.session.location,
+      players: data.session.players,
+      mode: data.session.mode,
       startedAt: data.session.startedAt,
       endedAt: data.session.endedAt,
       duration: formatDurationMs(data.durationMs),
@@ -197,7 +211,7 @@
       "- decisionPatterns: 决策模式（选择倾向、反应时间、技能使用策略等）",
       "- growthHighlights: 成长亮点（技能使用、创新选择、属性提升等）",
       "- reflectionPoints: 值得反思的点（可改进之处、学习机会等）",
-
+      "- 结合玩家信息（地点、人数等）进行情境化分析。",
       "",
       "游戏数据：",
       "```json",
@@ -206,8 +220,21 @@
     ].join("\n");
   }
 
+  function formatPlayers(p) {
+    if (!p) return "未知";
+    let s = [];
+    if (p.enlightenment) s.push(`启蒙期${p.enlightenment}人`);
+    if (p.growth) s.push(`成长期${p.growth}人`);
+    if (p.adolescence) s.push(`青春期${p.adolescence}人`);
+    if (p.adults) s.push(`成年人${p.adults}人`);
+    return s.length ? s.join(", ") : "无详细数据";
+  }
+
   function buildStoryPromptPart1(data, extractMd) {
     const meta = [
+      `地点: ${data.session.location || "未知"}`,
+      `玩家: ${formatPlayers(data.session.players)}`,
+      `模式: ${data.session.mode === 'standard' ? '标准版' : (data.session.mode === 'essence' ? '精华版' : data.session.mode || '未知')}`,
       `游戏开始: ${formatTs(data.session.startedAt) || "未知"}`,
       `游戏结束: ${formatTs(data.session.endedAt) || "未知"}`,
       `总时长: ${formatDurationMs(data.durationMs) || "未知"}`,
@@ -221,6 +248,7 @@
       "- 标题必须是：# 游戏复盘：回顾",
       "- 篇幅在 600-900 字之间（数据不足可略短，但不要少于 400 字）。",
       "- 叙述顺序尽量按卡牌顺序，穿插关键分数变化与决策原因。",
+      "- 开头请简要提及本次游戏的背景信息（地点、玩家构成等）。",
       "- 不要写成纯清单。",
       "",
       `基础信息：${meta}`,
@@ -318,14 +346,13 @@
       <div style="max-height: 460px; overflow-y: auto; line-height: 1.7;">
         <h4>复盘报告已生成</h4>
         <div style="margin: 12px 0; white-space: pre-wrap; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 4px;">${preview}</div>
-        ${
-          extractPreview
-            ? `<details style="margin-top: 12px;">
+        ${extractPreview
+        ? `<details style="margin-top: 12px;">
                 <summary style="cursor: pointer;">查看精炼数据</summary>
                 <div style="margin-top: 8px; white-space: pre-wrap; max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 8px; border-radius: 4px;">${extractPreview}</div>
               </details>`
-            : ""
-        }
+        : ""
+      }
         <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
           <button id="review-open-report" style="padding: 10px 16px; background: #2b6cb0; color: #fff; border: none; border-radius: 6px; cursor: pointer;">打开复盘报告</button>
           <button id="review-download-report" style="padding: 10px 16px; background: #2f855a; color: #fff; border: none; border-radius: 6px; cursor: pointer;">下载 HTML</button>
@@ -407,7 +434,7 @@
       }
 
       const reviewData = buildReviewData(session, events);
-      
+
       // 检查数据是否足够
       if (reviewData.cards.length < 7) {
         renderStatus(target, `数据不足：至少需要完成 7 张卡牌才能生成有意义的复盘报告。当前只有 ${reviewData.cards.length} 张卡牌。`);
@@ -417,7 +444,7 @@
       renderStatus(target, "正在提取有意思的数据...");
       const extractPrompt = buildExtractPrompt(reviewData);
       const extractResult = await callLlm(extractPrompt, { maxTokens: 900, temperature: 0.2 });
-      
+
       // 解析JSON结果
       let extractData;
       try {
@@ -431,7 +458,7 @@
         // 如果解析失败，使用原始文本作为Markdown
         extractData = { markdown: extractResult };
       }
-      
+
       const extractMd = extractData.markdown || JSON.stringify(extractData, null, 2);
 
       renderStatus(target, "正在生成复盘故事（第 1 部分）...");
@@ -501,23 +528,23 @@
         skills: gameAnalytics?.skillUsage || [],
         durationMs: 360000
       };
-      
+
       const extractPrompt = buildExtractPrompt(mockData);
       const extractMd = await callLlm(extractPrompt, { maxTokens: 900, temperature: 0.2 });
-      
+
       const part1 = await callLlm(buildStoryPromptPart1(mockData, extractMd), {
         maxTokens: 1400,
         temperature: 0.7
       });
-      
+
       const part2 = await callLlm(buildStoryPromptPart2(extractMd), {
         maxTokens: 1200,
         temperature: 0.7
       });
-      
+
       const markdown = [part1.trim(), "", part2.trim()].join("\n\n").trim();
       const reportHtml = buildReportHtml(markdown, mockData);
-      
+
       return { markdown, reportHtml };
     },
     extractInterestingData: async (gameHistory, gameAnalytics) => {
@@ -527,10 +554,10 @@
         skills: gameAnalytics?.skillUsage || [],
         durationMs: 360000
       };
-      
+
       const extractPrompt = buildExtractPrompt(mockData);
       const result = await callLlm(extractPrompt, { maxTokens: 900, temperature: 0.2 });
-      
+
       try {
         const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```/);
         if (jsonMatch) {
@@ -553,19 +580,19 @@
         skills: [],
         durationMs: gameStats?.totalTime || 360000
       };
-      
+
       const extractMd = JSON.stringify(analysisData, null, 2);
-      
+
       const part1 = await callLlm(buildStoryPromptPart1(mockData, extractMd), {
         maxTokens: 1400,
         temperature: 0.7
       });
-      
+
       const part2 = await callLlm(buildStoryPromptPart2(extractMd), {
         maxTokens: 1200,
         temperature: 0.7
       });
-      
+
       return { part1, part2 };
     },
     generateHTMLReport: (storyParts, gameStats) => {
@@ -576,7 +603,7 @@
         skills: [],
         durationMs: gameStats?.totalTime || 360000
       };
-      
+
       return buildReportHtml(markdown, mockData);
     },
     downloadHTMLReport: (html) => {
@@ -593,7 +620,7 @@
       console.log(`Progress: ${message}`, { isComplete, isError });
     }
   };
-  
+
   window.GameReview = moduleAPI;
   window.gameReviewModule = moduleAPI;
 })();

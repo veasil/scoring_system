@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,29 +9,122 @@
 
     <style>
         /* 登录区：不依赖 styles.css 的最小样式（避免你现有样式被破坏） */
-        .game-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-        .auth-controls { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-        .auth-btn { padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(0,0,0,.15); background: #fff; cursor: pointer; }
-        .auth-btn.secondary { background: rgba(0,0,0,.04); }
-        .user-badge { display: flex; align-items: center; gap: 10px; }
-        .hidden { display: none !important; }
+        .game-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .auth-controls {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .auth-btn {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(0, 0, 0, .15);
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .auth-btn.secondary {
+            background: rgba(0, 0, 0, .04);
+        }
+
+        .user-badge {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
         /* 让 disabled 的“新游戏”更明显 */
-        button[disabled] { opacity: .55; cursor: not-allowed; }
+        button[disabled] {
+            opacity: .55;
+            cursor: not-allowed;
+        }
+
         /* 登录模态框内容布局 */
-        .auth-modal-body { max-width: 520px; }
-        .auth-tabs { display:flex; gap:10px; margin-bottom:12px; }
-        .auth-tab { flex:1; padding:10px; border-radius:10px; border:1px solid rgba(0,0,0,.12); background:#fff; cursor:pointer; }
-        .auth-tab.active { background: rgba(102,126,234,.12); border-color: rgba(102,126,234,.45); }
-        .auth-form { display:flex; flex-direction:column; gap:10px; }
-        .auth-form input { padding:10px; border-radius:10px; border:1px solid rgba(0,0,0,.15); }
-        .auth-actions { display:flex; gap:10px; }
-        .auth-hint { font-size: 12px; opacity: .75; line-height: 1.6; }
-        .qr-box { display:flex; gap:14px; align-items:flex-start; }
-        .qr-img { width: 180px; height: 180px; border:1px solid rgba(0,0,0,.12); border-radius:12px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
-        .qr-img img { width:100%; height:100%; object-fit:cover; }
+        .auth-modal-body {
+            max-width: 520px;
+        }
+
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, .12);
+            background: #fff;
+            cursor: pointer;
+        }
+
+        .auth-tab.active {
+            background: rgba(102, 126, 234, .12);
+            border-color: rgba(102, 126, 234, .45);
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .auth-form input {
+            padding: 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(0, 0, 0, .15);
+        }
+
+        .auth-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .auth-hint {
+            font-size: 12px;
+            opacity: .75;
+            line-height: 1.6;
+        }
+
+        .qr-box {
+            display: flex;
+            gap: 14px;
+            align-items: flex-start;
+        }
+
+        .qr-img {
+            width: 180px;
+            height: 180px;
+            border: 1px solid rgba(0, 0, 0, .12);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .qr-img img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
     </style>
 
 </head>
+
 <body>
     <div id="app">
         <header class="game-header">
@@ -44,7 +138,8 @@
                 <div class="timer-display">
                     <div class="timer-controls">
                         <label for="timer-input">倒计时(秒):</label>
-                        <input type="number" id="timer-input" value="5000" min="1" max="99999" style="width: 80px; margin: 0 5px;">
+                        <input type="number" id="timer-input" value="5000" min="1" max="99999"
+                            style="width: 80px; margin: 0 5px;">
                         <button id="set-timer" class="timer-btn">设置</button>
                     </div>
                     <div class="timer-info">
@@ -52,7 +147,7 @@
                         <span id="timer">83:20</span>
                     </div>
                 </div>
-            
+
                 <div class="auth-controls">
                     <button id="login-btn" class="auth-btn">登录</button>
                     <div id="user-badge" class="user-badge hidden">
@@ -83,7 +178,7 @@
                     </div>
                     <button id="submit-choice" class="submit-btn" disabled>确认选择</button>
                 </div>
-                
+
                 <div class="skills-section">
                     <h3>数智技能</h3>
                     <div class="skills-buttons">
@@ -109,7 +204,7 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <div class="result-section">
                     <div class="feedback-container">
                         <div class="feedback-left">
@@ -176,7 +271,8 @@
                 <div class="auth-tabs">
                     <button class="auth-tab active" id="tab-direct">账号登录</button>
                     <button class="auth-tab" id="tab-wechat">微信登录</button>
-                    <button class="auth-tab" id="tab-dev" style="background: #f0f0f0; font-size: 12px; padding: 6px 8px;">开发者</button>
+                    <button class="auth-tab" id="tab-dev"
+                        style="background: #f0f0f0; font-size: 12px; padding: 6px 8px;">开发者</button>
                 </div>
 
                 <!-- 账号登录 -->
@@ -185,7 +281,8 @@
                         <input id="login-phone" autocomplete="tel" placeholder="手机号" required />
                         <div style="display:flex; gap:10px;">
                             <input id="login-code" placeholder="验证码" style="flex:1;" required />
-                            <button type="button" id="sms-send-btn" class="auth-btn secondary" style="white-space:nowrap;">获取验证码</button>
+                            <button type="button" id="sms-send-btn" class="auth-btn secondary"
+                                style="white-space:nowrap;">获取验证码</button>
                         </div>
                         <div class="auth-actions">
                             <button type="submit" class="auth-btn" style="flex:1;">验证并登录</button>
@@ -201,7 +298,7 @@
                         <div style="flex:1;">
                             <button id="wechat-qr-btn" class="auth-btn" style="width:100%;">获取微信登录二维码</button>
                             <div class="auth-hint" style="margin-top:10px;">
-                                若在微信内打开网页：通常更建议用「微信公众平台网页授权」或直接做成小程序登录。<br/>
+                                若在微信内打开网页：通常更建议用「微信公众平台网页授权」或直接做成小程序登录。<br />
                                 若在电脑浏览器：可用「微信开放平台网站应用扫码登录」。
                             </div>
                             <div id="wechat-status" class="auth-hint" style="margin-top:10px;"></div>
@@ -213,11 +310,12 @@
                 <div id="panel-dev" class="hidden">
                     <div class="auth-form">
                         <div class="auth-hint" style="margin-bottom: 15px; color: #666;">
-                            <strong>开发者模式</strong><br/>
+                            <strong>开发者模式</strong><br />
                             绕过短信验证，直接使用本地模拟登录。仅用于开发测试。
                         </div>
                         <input id="dev-username" placeholder="输入任意用户名" style="margin-bottom: 10px;" />
-                        <button id="dev-login-btn" class="auth-btn" style="width: 100%; background: #28a745;">直接登录</button>
+                        <button id="dev-login-btn" class="auth-btn"
+                            style="width: 100%; background: #28a745;">直接登录</button>
                         <div class="auth-hint" style="margin-top: 10px; font-size: 11px; opacity: 0.7;">
                             注意：此模式仅在开发环境使用，生产环境请使用正常登录方式。
                         </div>
@@ -227,6 +325,153 @@
             </div>
         </div>
     </div>
+
+    <!-- 游戏设置向导模态框 -->
+    <div id="setup-modal" class="modal">
+        <div class="modal-content auth-modal-body" style="max-width: 600px;">
+            <span class="close" id="setup-close">&times;</span>
+            <div id="setup-body">
+
+                <!-- Step 1: Init Data -->
+                <div id="setup-step-1" class="setup-step">
+                    <h2>🎮 新游戏设置 (1/2)</h2>
+                    <p class="auth-hint">请录入本场游戏的基础信息，以便生成分析报告。</p>
+
+                    <div class="auth-form" style="margin-top: 15px;">
+                        <label><strong>📍 游戏地点</strong></label>
+                        <input id="setup-location" placeholder="例如：XX社区活动中心、家里..." />
+
+                        <label style="margin-top: 10px;"><strong>👥 游戏人数分布</strong></label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div>
+                                <label style="font-size: 12px; color: #666;">2-5岁 (启蒙期)</label>
+                                <input type="number" id="p-enlightenment" min="0" placeholder="0" />
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #666;">6-12岁 (成长期)</label>
+                                <input type="number" id="p-growth" min="0" placeholder="0" />
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #666;">13-18岁 (青春期)</label>
+                                <input type="number" id="p-adolescence" min="0" placeholder="0" />
+                            </div>
+                            <div>
+                                <label style="font-size: 12px; color: #666;">18岁+ (成年人)</label>
+                                <input type="number" id="p-adults" min="0" placeholder="0" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="auth-actions" style="margin-top: 20px;">
+                        <button id="setup-next-btn" class="auth-btn"
+                            style="flex:1; background: #007bff; color: white;">下一页</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Mode Selection -->
+                <div id="setup-step-2" class="setup-step hidden">
+                    <h2>⚡ 选择游戏模式 (2/2)</h2>
+                    <p class="auth-hint">请选择适合当前场景的游戏模式。</p>
+
+                    <div class="mode-cards" style="display: flex; gap: 10px; margin-top: 15px;">
+                        <div class="mode-choice-card selected" data-mode="standard">
+                            <h4>标准版</h4>
+                            <div class="mode-desc">体验 15 张卡牌</div>
+                            <div class="mode-time">5000秒</div>
+                            <div class="mode-detail">启蒙5 / 成长5 / 青春5</div>
+                        </div>
+                        <div class="mode-choice-card" data-mode="essence">
+                            <h4>精华版</h4>
+                            <div class="mode-desc">体验 9 张卡牌</div>
+                            <div class="mode-time">3600秒</div>
+                            <div class="mode-detail">启蒙3 / 成长3 / 青春3</div>
+                        </div>
+                        <div class="mode-choice-card" data-mode="free">
+                            <h4>自由版</h4>
+                            <div class="mode-desc">自定义设置</div>
+                            <div class="mode-time">自定义</div>
+                            <div class="mode-detail">不少于7张</div>
+                        </div>
+                    </div>
+
+                    <!-- Free Mode Config -->
+                    <div id="free-mode-config" class="hidden"
+                        style="margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 8px;">
+                        <div style="display:flex; gap: 10px; align-items: center;">
+                            <label>总时长(秒):</label>
+                            <input type="number" id="free-duration" value="3600" style="width: 80px;" />
+                        </div>
+                        <div style="margin-top: 8px;">
+                            <label>卡牌数量配置:</label>
+                            <div style="display:flex; gap: 5px; margin-top: 5px;">
+                                <input type="number" id="free-c1" placeholder="启蒙" style="width: 50px;" />
+                                <input type="number" id="free-c2" placeholder="成长" style="width: 50px;" />
+                                <input type="number" id="free-c3" placeholder="青春" style="width: 50px;" />
+                            </div>
+                            <div class="auth-hint">建议每张卡牌预留5分钟。总数≥7张。</div>
+                        </div>
+                    </div>
+
+                    <div
+                        style="margin-top: 15px; font-size: 12px; color: #888; background: #fffbe6; padding: 8px; border-radius: 4px;">
+                        💡 备注：暂时以标准版5-5-5，精华版3-3-3为固定卡牌设定。仍需提升智能性。
+                    </div>
+
+                    <div class="auth-actions" style="margin-top: 20px;">
+                        <button id="setup-back-btn" class="auth-btn secondary">上一步</button>
+                        <button id="setup-start-btn" class="auth-btn"
+                            style="flex:1; background: #28a745; color: white;">开始游戏</button>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .mode-choice-card {
+            flex: 1;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .mode-choice-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .mode-choice-card.selected {
+            border-color: #007bff;
+            background: rgba(0, 123, 255, 0.05);
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+        }
+
+        .mode-choice-card h4 {
+            margin: 0 0 5px 0;
+            color: #333;
+        }
+
+        .mode-desc {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .mode-time {
+            font-size: 14px;
+            font-weight: bold;
+            color: #007bff;
+            margin: 4px 0;
+        }
+
+        .mode-detail {
+            font-size: 10px;
+            color: #999;
+        }
+    </style>
 
 
     <!-- 录音器 -->
@@ -248,7 +493,7 @@
                 document.getElementById('progress-display').innerHTML = '<p>加载失败</p>';
                 return;
             }
-            
+
             let selectedChoice = null;
             let timerInterval = null;
             let hasStartedNewGame = false; // 跟踪是否已按新游戏
@@ -274,12 +519,12 @@
             function closeAuthModal() { authModal.style.display = 'none'; }
             window.openAuthModal = openAuthModal;
 
-            async function api(path, { method='GET', body=null } = {}) {
+            async function api(path, { method = 'GET', body = null } = {}) {
                 const headers = { 'Content-Type': 'application/json' };
                 if (authState.token) headers['Authorization'] = `Bearer ${authState.token}`;
                 const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : null });
                 let data = null;
-                try { data = await res.json(); } catch (_) {}
+                try { data = await res.json(); } catch (_) { }
                 if (!res.ok) {
                     const msg = (data && data.error) ? data.error : `请求失败(${res.status})`;
                     throw new Error(msg);
@@ -318,11 +563,11 @@
                     authState.token = null;
                     authState.user = null;
                     localStorage.removeItem('WQT_AUTH_TOKEN');
-                if (window.GameReview && window.GameReview.setSessionId) {
-                    window.GameReview.setSessionId(null);
-                }
-                activeSessionId = null;
-                hasFinishedSession = false;
+                    if (window.GameReview && window.GameReview.setSessionId) {
+                        window.GameReview.setSessionId(null);
+                    }
+                    activeSessionId = null;
+                    hasFinishedSession = false;
                     setAuthUI(false);
                 }
             }
@@ -334,7 +579,7 @@
             });
 
             logoutBtn.onclick = async () => {
-                try { await api('/api/auth/logout', { method:'POST' }); } catch (_) {}
+                try { await api('/api/auth/logout', { method: 'POST' }); } catch (_) { }
                 authState.token = null;
                 authState.user = null;
                 localStorage.removeItem('WQT_AUTH_TOKEN');
@@ -362,7 +607,7 @@
                 // 重置所有标签页
                 [tabDirect, tabWechat, tabDev].forEach(tab => tab.classList.remove('active'));
                 [panelDirect, panelWechat, panelDev].forEach(panel => panel.classList.add('hidden'));
-                
+
                 if (which === 'direct') {
                     tabDirect.classList.add('active');
                     panelDirect.classList.remove('hidden');
@@ -409,7 +654,7 @@
                 smsStatus.textContent = '发送中...';
                 smsSendBtn.disabled = true;
                 try {
-                    const ret = await api('/api/auth/sms/send', { method:'POST', body:{ phone } });
+                    const ret = await api('/api/auth/sms/send', { method: 'POST', body: { phone } });
                     const expireSec = ret.expiresInSeconds || 300;
                     smsStatus.textContent = `验证码已发送，${expireSec}秒内有效。模拟环境验证码：${ret.mockCode || '请查看控制台日志'}`;
                     startSmsCountdown(60);
@@ -425,11 +670,11 @@
                 const code = codeInput.value.trim();
                 if (!phone || !code) { alert('请输入手机号和验证码'); return; }
                 try {
-                    const ret = await api('/api/auth/sms/verify', { method:'POST', body:{ phone, code } });
+                    const ret = await api('/api/auth/sms/verify', { method: 'POST', body: { phone, code } });
                     authState.token = ret.token;
                     authState.user = ret.user;
                     localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
-                    
+
                     // 检查是否为新用户
                     if (ret.user.isNewUser) {
                         // 新用户需要完善资料
@@ -437,7 +682,7 @@
                         window.location.href = '/complete-profile.html';
                         return;
                     }
-                    
+
                     setAuthUI(true);
                     closeAuthModal();
                     alert(`欢迎回来，${ret.user.guardianName || '守望师'}!`);
@@ -449,26 +694,26 @@
             // 开发者模式登录
             const devUsernameInput = document.getElementById('dev-username');
             const devLoginBtn = document.getElementById('dev-login-btn');
-            
+
             devLoginBtn.onclick = async () => {
                 const username = devUsernameInput.value.trim() || 'dev_user';
                 try {
                     // 先尝试注册（如果用户不存在）
                     try {
-                        await api('/api/auth/register', { 
-                            method: 'POST', 
-                            body: { username, password: 'dev123456' } 
+                        await api('/api/auth/register', {
+                            method: 'POST',
+                            body: { username, password: 'dev123456' }
                         });
                     } catch (e) {
                         // 如果注册失败（可能用户已存在），就直接登录
                     }
-                    
+
                     // 登录
-                    const ret = await api('/api/auth/login', { 
-                        method: 'POST', 
-                        body: { username, password: 'dev123456' } 
+                    const ret = await api('/api/auth/login', {
+                        method: 'POST',
+                        body: { username, password: 'dev123456' }
                     });
-                    
+
                     authState.token = ret.token;
                     authState.user = ret.user;
                     localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
@@ -508,7 +753,7 @@
                                 setAuthUI(true);
                                 closeAuthModal();
                             }
-                        } catch (_) {}
+                        } catch (_) { }
                     }, 2000);
 
                     // 2分钟超时
@@ -526,7 +771,7 @@
             initAuth();
             // ========== 登录状态（前端） end ==========
 
-            
+
             // 音效系统已移至 sound-effects.js
             let gameAnalytics = {
                 cardsPlayed: [],
@@ -552,16 +797,16 @@
                     });
                 }
             }
-            
+
             // 数智技能按钮逼辑
             document.querySelectorAll('.skill-btn').forEach(btn => {
                 btn.onclick = (e) => {
                     e.preventDefault();
                     const skill = btn.dataset.skill;
                     const checkbox = btn.querySelector('.skill-checkbox');
-                    
+
                     if (skillsUsed[skill]) return;
-                    
+
                     // 创心力技能需要填写题号
                     if (skill === '创心力') {
                         const cardNum = document.getElementById('card-number').value;
@@ -569,31 +814,31 @@
                             alert('请先填写卡牌编号！');
                             return;
                         }
-                        
+
                         // 弹出输入框让用户填写选项D
                         const optionD = prompt('请填写你的选项D：');
                         if (optionD === null) return; // 用户取消
-                        
+
                         // 创心力技能：属性+1
                         const attrsBefore = { ...window.globalState.getAttributes() };
                         window.globalState.updateAttribute(skill, window.globalState.state.attributes[skill] + 1);
                         const attrsAfter = { ...window.globalState.getAttributes() };
-                        
+
                         skillsUsed[skill] = true;
                         checkbox.checked = true;
                         playSound('upgrade'); // 播放升级声效
-                        
+
                         // 保存选项D用于复盘
                         creativeOptions[cardNum] = optionD;
-                        
+
                         // 记录技能使用到操作历史
                         const skillHistoryEntry = {
                             cardId: parseInt(cardNum),
                             selectedOption: 'SKILL',
                             cardData: null,
-                            optionData: { 
-                                text: `使用创心力技能，创建选项D：${optionD}`, 
-                                consequence: '创心力 +1' 
+                            optionData: {
+                                text: `使用创心力技能，创建选项D：${optionD}`,
+                                consequence: '创心力 +1'
                             },
                             timestamp: new Date(),
                             attributesBefore: attrsBefore,
@@ -604,7 +849,7 @@
                             skillEffect: { '创心力': 1 }
                         };
                         window.globalState.addHistoryEntry(skillHistoryEntry);
-                        
+
                         // 记录技能使用
                         gameAnalytics.skillUsage.push({
                             skill: '创心力',
@@ -626,7 +871,7 @@
 
                         // 弹窗询问是否选择选项D
                         const chooseD = confirm('小伍请回答是否要选择选项D？');
-                        
+
                         if (chooseD) {
                             // 选择选项D，直接给出反馈，不需要再选ABC
                             const card = window.CARD_DATA.find(c => c.id === parseInt(cardNum));
@@ -644,15 +889,15 @@
                                     isCreativeOption: true,
                                     skillUsed: '创心力'
                                 };
-                                
+
                                 window.globalState.addHistoryEntry(historyEntry);
-                                
+
                                 // 更新游戏进度
                                 window.globalState.state.cardsCompleted++;
                                 window.globalState.state.currentPhase = card.phase;
                                 document.getElementById('current-phase').textContent = `当前阶段: ${card.phase}`;
-                                document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/15`;
-                                
+                                document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/${window.globalState.targetCards || 15}`;
+
                                 // 记录事件
                                 if (window.GameReview && window.GameReview.recordEvent) {
                                     window.GameReview.recordEvent('card_choice', {
@@ -669,7 +914,7 @@
                                         isCreativeOption: true
                                     });
                                 }
-                                
+
                                 // 显示反馈
                                 document.getElementById('choice-display').innerHTML = `
                                     <div><h4>卡牌 ${cardNum} - 选项D（创心力）</h4>
@@ -677,15 +922,16 @@
                                     <p><strong>反馈：</strong>你选择了创新的解决方案！创心力让你找到了独特的解决方式。</p>
                                     </div>
                                 `;
-                                
+
                                 // 重置输入
                                 document.getElementById('card-number').value = '';
                                 document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
                                 document.getElementById('submit-choice').disabled = true;
                                 selectedChoice = null;
-                                
+
                                 // 检查是否通关
-                                if (window.globalState.state.cardsCompleted >= 15) {
+                                const target = window.globalState.targetCards || 15;
+                                if (window.globalState.state.cardsCompleted >= target) {
                                     if (timerInterval) clearInterval(timerInterval);
                                     finalizeSession('success');
                                     playSound('success');
@@ -693,7 +939,7 @@
                                     document.getElementById('progress-display').innerHTML = `
                                         <div style="color: #52c41a; text-align: center; padding: 20px;">
                                             <h1 style="font-size: 3.5rem; margin: 20px 0; color: #73d13d; text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">🎉 恭喜通关！</h1>
-                                            <p style="font-size: 1.2rem; margin: 15px 0;">您已成功完成所有15张卡牌！</p>
+                                            <p style="font-size: 1.2rem; margin: 15px 0;">您已成功完成所有${target}张卡牌！</p>
                                             <p style="font-size: 1.4rem; margin: 15px 0;"><strong>最终总分：${totalScore}/50</strong></p>
                                             <p style="font-size: 1.1rem; margin: 10px 0;">当前阶段：${card.phase}</p>
                                             <p style="font-size: 1.1rem; margin: 10px 0;">阶段失败次数：${window.globalState.state.stageFailures}/3</p>
@@ -712,12 +958,12 @@
                         // 安全力技能：检查是否有伍力值=1的，有的话+1
                         const attrs = window.globalState.getAttributes();
                         const lowAttrs = Object.entries(attrs).filter(([k, v]) => v === 1);
-                        
+
                         const attrsBefore = { ...attrs };
-                        
+
                         skillsUsed[skill] = true;
                         checkbox.checked = true;
-                        
+
                         let attributeChanges = {};
                         if (lowAttrs.length > 0) {
                             lowAttrs.forEach(([attrName, _]) => {
@@ -725,17 +971,17 @@
                                 attributeChanges[attrName] = 1; // 从1提升到2，变化+1
                             });
                         }
-                        
+
                         const attrsAfter = window.globalState.getAttributes();
-                        
+
                         // 记录技能使用到操作历史
                         const skillHistoryEntry = {
                             cardId: null,
                             selectedOption: 'SKILL',
                             cardData: null,
-                            optionData: { 
-                                text: `使用安全力技能`, 
-                                consequence: lowAttrs.length > 0 
+                            optionData: {
+                                text: `使用安全力技能`,
+                                consequence: lowAttrs.length > 0
                                     ? `检测到危险值，已将 ${lowAttrs.map(([k, _]) => k).join('、')} 提升至 2`
                                     : '所有伍力值都安全，无需调整'
                             },
@@ -748,23 +994,23 @@
                             skillEffect: attributeChanges
                         };
                         window.globalState.addHistoryEntry(skillHistoryEntry);
-                        
+
                         document.getElementById('progress-display').innerHTML = `<p>安全力数智技能已使用！</p>`;
-                        
+
                         let choiceHtml = '<div><h4>当前伍力值情况：</h4>';
                         Object.entries(attrsAfter).forEach(([k, v]) => {
                             choiceHtml += `<p>${k}: ${v}</p>`;
                         });
-                        
+
                         if (lowAttrs.length > 0) {
                             choiceHtml += `<p style="color: #28a745;">检测到危险值，已将 ${lowAttrs.map(([k, _]) => k).join('、')} 提升至 2</p>`;
                         } else {
                             choiceHtml += '<p>所有伍力值都安全，无需调整</p>';
                         }
                         choiceHtml += '</div>';
-                        
+
                         document.getElementById('choice-display').innerHTML = choiceHtml;
-                        
+
                         // 记录技能使用
                         gameAnalytics.skillUsage.push({
                             skill: '安全力',
@@ -787,19 +1033,19 @@
                         const attrsBefore = { ...window.globalState.getAttributes() };
                         window.globalState.updateAttribute(skill, window.globalState.state.attributes[skill] + 1);
                         const attrsAfter = { ...window.globalState.getAttributes() };
-                        
+
                         skillsUsed[skill] = true;
                         checkbox.checked = true;
                         playSound('upgrade'); // 播放升级声效
-                        
+
                         // 记录技能使用到操作历史
                         const skillHistoryEntry = {
                             cardId: null,
                             selectedOption: 'SKILL',
                             cardData: null,
-                            optionData: { 
-                                text: `使用${skill}技能`, 
-                                consequence: `${skill} +1` 
+                            optionData: {
+                                text: `使用${skill}技能`,
+                                consequence: `${skill} +1`
                             },
                             timestamp: new Date(),
                             attributesBefore: attrsBefore,
@@ -810,9 +1056,9 @@
                             skillEffect: { [skill]: 1 }
                         };
                         window.globalState.addHistoryEntry(skillHistoryEntry);
-                        
+
                         document.getElementById('progress-display').innerHTML = `<p>${skill}数智技能已使用！${skill} +1</p>`;
-                        
+
                         // 记录技能使用
                         gameAnalytics.skillUsage.push({
                             skill: skill,
@@ -831,7 +1077,7 @@
                     }
                 };
             });
-            
+
             // 初始化UI
             document.querySelectorAll('.choice-btn').forEach(btn => {
                 btn.onclick = () => {
@@ -841,7 +1087,7 @@
                     document.getElementById('submit-choice').disabled = false;
                 };
             });
-            
+
             // 查看事件按钮逻辑
             document.getElementById('view-event').onclick = () => {
                 const cardNum = document.getElementById('card-number').value;
@@ -875,36 +1121,36 @@
                 `;
                 document.getElementById('modal').style.display = 'block';
             };
-            
+
             // 关闭模态框
             document.querySelector('.close').onclick = () => {
                 document.getElementById('modal').style.display = 'none';
             };
-            
+
             window.onclick = (event) => {
                 if (event.target === document.getElementById('modal')) {
                     document.getElementById('modal').style.display = 'none';
                 }
             };
-            
+
             document.getElementById('submit-choice').onclick = () => {
                 // 检查是否为试用模式
                 if (!hasStartedNewGame) {
                     alert('当前只是试用，请按新游戏开始游戏，并请手动开启录音！');
                     return;
                 }
-                
+
                 const cardNum = document.getElementById('card-number').value;
                 if (cardNum && selectedChoice) {
                     const card = window.CARD_DATA.find(c => c.id === parseInt(cardNum));
                     if (card && card.options[selectedChoice]) {
                         const option = card.options[selectedChoice];
-                        
+
                         // 更新属性
                         const attrsBefore = window.globalState.getAttributes();
                         window.globalState.updateAttributes(option.attributeEffects);
                         const attrsAfter = window.globalState.getAttributes();
-                        
+
                         // 检查阶段变化
                         const oldPhase = window.globalState.state.currentPhase;
                         if (oldPhase !== card.phase) {
@@ -912,19 +1158,19 @@
                         }
                         window.globalState.state.currentPhase = card.phase;
                         window.globalState.state.cardsCompleted++;
-                        
+
                         // 更新桌游模式显示
                         document.getElementById('current-phase').textContent = `当前阶段: ${card.phase}`;
-                        document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/15`;
+                        document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/${window.globalState.targetCards || 15}`;
                         document.getElementById('stage-failures').textContent = `阶段失败: ${window.globalState.state.stageFailures}/3`;
-                        
+
                         // 检查是否有属性归零
                         const hasZero = Object.values(attrsAfter).some(v => v === 0);
-                        
+
                         if (hasZero) {
                             window.globalState.state.stageFailures++;
                             document.getElementById('stage-failures').textContent = `阶段失败: ${window.globalState.state.stageFailures}/3`;
-                            
+
                             if (window.globalState.state.stageFailures >= 3) {
                                 if (timerInterval) clearInterval(timerInterval);
                                 finalizeSession('failure');
@@ -953,8 +1199,9 @@
                                 </div>
                             `;
                         } else {
-                            // 检查是否通关（完成15张卡牌且未完全失败）
-                            if (window.globalState.state.cardsCompleted >= 15 && window.globalState.state.stageFailures < 3) {
+                            // 检查是否通关（完成设定卡牌数且未完全失败）
+                            const target = window.globalState.targetCards || 15;
+                            if (window.globalState.state.cardsCompleted >= target && window.globalState.state.stageFailures < 3) {
                                 if (timerInterval) clearInterval(timerInterval);
                                 finalizeSession('success');
                                 playSound('success'); // 播放通关成功声效
@@ -962,7 +1209,7 @@
                                 document.getElementById('progress-display').innerHTML = `
                                     <div style="color: #52c41a; text-align: center; padding: 20px;">
                                         <h1 style="font-size: 3.5rem; margin: 20px 0; color: #73d13d; text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">🎉 恭喜通关！</h1>
-                                        <p style="font-size: 1.2rem; margin: 15px 0;">您已成功完成所有15张卡牌！</p>
+                                        <p style="font-size: 1.2rem; margin: 15px 0;">您已成功完成所有${target}张卡牌！</p>
                                         <p style="font-size: 1.4rem; margin: 15px 0;"><strong>最终总分：${totalScore}/50</strong></p>
                                         <p style="font-size: 1.1rem; margin: 10px 0;">当前阶段：${card.phase}</p>
                                         <p style="font-size: 1.1rem; margin: 10px 0;">阶段失败次数：${window.globalState.state.stageFailures}/3</p>
@@ -977,7 +1224,7 @@
                                 `;
                             }
                         }
-                        
+
                         // 记录历史和分析数据
                         const historyEntry = {
                             cardId: parseInt(cardNum),
@@ -1009,9 +1256,9 @@
                             });
                         }
 
-                        
+
                         window.globalState.addHistoryEntry(historyEntry);
-                        
+
                         // 更新分析数据
                         gameAnalytics.cardsPlayed.push({
                             cardId: parseInt(cardNum),
@@ -1021,7 +1268,7 @@
                             timestamp: new Date(),
                             isCreativeOption: false
                         });
-                        
+
                         if (hasZero) {
                             gameAnalytics.failures.push({
                                 cardId: parseInt(cardNum),
@@ -1029,7 +1276,7 @@
                                 timestamp: new Date()
                             });
                         }
-                        
+
                         // 重置
                         document.getElementById('card-number').value = '';
                         document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
@@ -1038,15 +1285,15 @@
                     }
                 }
             };
-            
+
             let gameTime = 5000;
             let isPaused = false;
-            
+
             function updateTimer() {
-                const m = Math.floor(gameTime/60), s = gameTime%60;
-                document.getElementById('timer').textContent = `${m}:${s.toString().padStart(2,'0')}`;
+                const m = Math.floor(gameTime / 60), s = gameTime % 60;
+                document.getElementById('timer').textContent = `${m}:${s.toString().padStart(2, '0')}`;
             }
-            
+
             // 设置倒计时长度
             document.getElementById('set-timer').onclick = () => {
                 const inputValue = parseInt(document.getElementById('timer-input').value);
@@ -1076,7 +1323,37 @@
                     }
                 }
             };
-            
+
+            // 设置倒计时长度 - This functionality is now handled by the setup wizard
+            // document.getElementById('set-timer').onclick = () => {
+            //     const inputValue = parseInt(document.getElementById('timer-input').value);
+            //     if (inputValue && inputValue > 0) {
+            //         gameTime = inputValue;
+            //         updateTimer();
+            //         // 如果游戏正在进行，重启计时器
+            //         if (timerInterval) {
+            //             clearInterval(timerInterval);
+            //             timerInterval = setInterval(() => {
+            //                 if (!isPaused) {
+            //                     gameTime--;
+            //                     updateTimer();
+            //                     if (gameTime <= 0) {
+            //                         clearInterval(timerInterval);
+            //                         finalizeSession('timeout');
+            //                         document.getElementById('progress-display').innerHTML = `
+            //                             <div style="color: #dc3545; text-align: center; padding: 20px;">
+            //                                 <h4>⏰ 时间到！游戏结束！</h4>
+            //                                 <p>游戏时间已用完，本轮游戏结束。</p>
+            //                                 <button onclick="location.reload()" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">重新开始</button>
+            //                             </div>
+            //                         `;
+            //                     }
+            //                 }
+            //             }, 1000);
+            //         }
+            //     }
+            // };
+
             document.getElementById('new-game').onclick = async () => {
                 // 登录后才能开始新游戏
                 if (!authState.token) {
@@ -1084,38 +1361,153 @@
                     openAuthModal();
                     return;
                 }
-                // 可选：记录一次“开始新游戏”到后台
+
+                // 打开设置向导
+                document.getElementById('setup-modal').style.display = 'block';
+                // 重置向导的第一页
+                showSetupStep(1);
+            };
+
+            // ========== Setup Wizard Logic ==========
+            let setupData = {
+                location: '',
+                players: {
+                    enlightenment: 0,
+                    growth: 0,
+                    adolescence: 0,
+                    adults: 0
+                },
+                mode: 'standard', // standard, essence, free
+                settings: {
+                    duration: 5000,
+                    targetCards: 15,
+                    cardsPerPhase: { '启蒙期': 5, '成长期': 5, '青春期': 5 }
+                }
+            };
+
+            const setupModal = document.getElementById('setup-modal');
+            const setupClose = document.getElementById('setup-close');
+            setupClose.onclick = () => setupModal.style.display = 'none';
+
+            window.showSetupStep = (step) => {
+                document.querySelectorAll('.setup-step').forEach(el => el.classList.add('hidden'));
+                document.getElementById(`setup-step-${step}`).classList.remove('hidden');
+            }
+
+            // Step 1 Next
+            document.getElementById('setup-next-btn').onclick = () => {
+                const loc = document.getElementById('setup-location').value.trim();
+                const p1 = parseInt(document.getElementById('p-enlightenment').value) || 0;
+                const p2 = parseInt(document.getElementById('p-growth').value) || 0;
+                const p3 = parseInt(document.getElementById('p-adolescence').value) || 0;
+                const p4 = parseInt(document.getElementById('p-adults').value) || 0;
+
+                if (!loc) { alert('请输入游戏地点'); return; }
+                if ((p1 + p2 + p3 + p4) <= 0) { alert('请至少输入一位玩家'); return; }
+
+                setupData.location = loc;
+                setupData.players = { enlightenment: p1, growth: p2, adolescence: p3, adults: p4 };
+
+                showSetupStep(2);
+            };
+
+            // Mode Selection logic
+            document.querySelectorAll('.mode-choice-card').forEach(card => {
+                card.onclick = () => {
+                    document.querySelectorAll('.mode-choice-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    const mode = card.dataset.mode;
+                    setupData.mode = mode;
+
+                    const freeConfig = document.getElementById('free-mode-config');
+                    if (mode === 'free') {
+                        freeConfig.classList.remove('hidden');
+                        document.getElementById('setup-start-btn').textContent = '自定义开始';
+                    } else {
+                        freeConfig.classList.add('hidden');
+                        document.getElementById('setup-start-btn').textContent = '开始游戏';
+                    }
+                };
+            });
+
+            // Step 2 Back
+            document.getElementById('setup-back-btn').onclick = () => showSetupStep(1);
+
+            // Start Game Confirm
+            document.getElementById('setup-start-btn').onclick = async () => {
+                // Config based on mode
+                if (setupData.mode === 'standard') {
+                    setupData.settings = { duration: 5000, targetCards: 15, cardsPerPhase: { '启蒙期': 5, '成长期': 5, '青春期': 5 } };
+                } else if (setupData.mode === 'essence') {
+                    setupData.settings = { duration: 3600, targetCards: 9, cardsPerPhase: { '启蒙期': 3, '成长期': 3, '青春期': 3 } };
+                } else {
+                    const dur = parseInt(document.getElementById('free-duration').value) || 3600;
+                    const c1 = parseInt(document.getElementById('free-c1').value) || 0;
+                    const c2 = parseInt(document.getElementById('free-c2').value) || 0;
+                    const c3 = parseInt(document.getElementById('free-c3').value) || 0;
+                    const total = c1 + c2 + c3;
+
+                    if (total < 7) { alert('自由版卡牌总数不得少于7张'); return; }
+                    setupData.settings = {
+                        duration: dur,
+                        targetCards: total,
+                        cardsPerPhase: { '启蒙期': c1, '成长期': c2, '青春期': c3 }
+                    };
+                }
+
+                // Call API
                 hasFinishedSession = false;
                 Object.keys(cardTimeMarks).forEach(key => delete cardTimeMarks[key]);
+
                 try {
-                    const startRet = await api('/api/game/start', { method:'POST', body:{ ts: Date.now() } });
+                    const startRet = await api('/api/game/start', {
+                        method: 'POST',
+                        body: {
+                            ts: Date.now(),
+                            location: setupData.location,
+                            players: setupData.players,
+                            mode: setupData.mode,
+                            settings: setupData.settings
+                        }
+                    });
                     activeSessionId = startRet?.sessionId || null;
                     if (window.GameReview && window.GameReview.setSessionId) {
                         window.GameReview.setSessionId(activeSessionId);
                     }
                     if (window.GameReview && window.GameReview.recordEvent && activeSessionId) {
-                        window.GameReview.recordEvent('game_start', { ts: Date.now() });
+                        window.GameReview.recordEvent('game_start', { ts: Date.now(), config: setupData });
                     }
                 } catch (_) {
                     activeSessionId = null;
-                    if (window.GameReview && window.GameReview.setSessionId) {
-                        window.GameReview.setSessionId(null);
-                    }
                 }
-hasStartedNewGame = true; // 标记已开始新游戏
+
+                setupModal.style.display = 'none';
+                startGameWithConfig(setupData.settings);
+            };
+
+            function startGameWithConfig(settings) {
+                hasStartedNewGame = true; // 标记已开始新游戏
                 window.globalState.startNewGame();
                 if (timerInterval) clearInterval(timerInterval);
-                const inputValue = parseInt(document.getElementById('timer-input').value);
-                gameTime = inputValue && inputValue > 0 ? inputValue : 5000;
+
+                // Apply Settings
+                gameTime = settings.duration;
+                // Store Target Cards in Global State or variable
+                window.globalState.targetCards = settings.targetCards;
+                window.globalState.cardsPerPhase = settings.cardsPerPhase;
+
                 isPaused = false;
                 window.globalState.state.cardsCompleted = 0;
                 window.globalState.state.stageFailures = 0;
                 window.globalState.state.currentPhase = '启蒙期';
                 document.getElementById('current-phase').textContent = '当前阶段: 启蒙期';
-                document.getElementById('cards-completed').textContent = '已完成: 0/15';
+                document.getElementById('cards-completed').textContent = `已完成: 0/${settings.targetCards}`;
                 document.getElementById('stage-failures').textContent = '阶段失败: 0/3';
                 document.getElementById('pause-game').textContent = '暂停';
-                
+
+                // Hide Timer Controls (requested: "cancel separate adjustment function")
+                document.querySelector('.timer-controls').style.display = 'none'; // Hide inputs
+
                 // 重置技能状态和分析数据
                 skillsUsed = { '安全力': false, '脑波力': false, '实感力': false, '创心力': false, '沟通力': false };
                 creativeOptions = {}; // 重置创心力选项D
@@ -1145,15 +1537,15 @@ hasStartedNewGame = true; // 标记已开始新游戏
                     }
                 }, 1000);
                 updateTimer();
-                document.getElementById('progress-display').innerHTML = '<p>游戏开始！</p>';
+                document.getElementById('progress-display').innerHTML = `<p>游戏开始！当前模式：${setupData.mode === 'standard' ? '标准版' : (setupData.mode === 'essence' ? '精华版' : '自由版')}</p>`;
                 document.getElementById('choice-display').innerHTML = '<p>等待选择...</p>';
-            };
-            
+            }
+
             document.getElementById('pause-game').onclick = () => {
                 isPaused = !isPaused;
                 document.getElementById('pause-game').textContent = isPaused ? '继续' : '暂停';
             };
-            
+
             document.getElementById('review-history').onclick = () => {
                 if (window.GameReview && window.GameReview.openReview) {
                     window.GameReview.openReview();
@@ -1163,15 +1555,15 @@ hasStartedNewGame = true; // 标记已开始新游戏
                     document.getElementById('choice-display').innerHTML = '<p>复盘功能正在加载...</p>';
                 }
             };
-            
-document.querySelectorAll('.mode-btn').forEach(btn => {
+
+            document.querySelectorAll('.mode-btn').forEach(btn => {
                 btn.onclick = () => {
                     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
                     const mode = btn.id.replace('-mode', '');
                     document.querySelectorAll('.game-interface').forEach(i => i.classList.remove('active'));
                     document.getElementById(`${mode}-interface`).classList.add('active');
-                    
+
                     if (mode === 'supervisor' && window.SupervisorController) {
                         if (!window.supervisorController) {
                             window.supervisorController = new SupervisorController(window.globalState);
@@ -1180,42 +1572,48 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
                     }
                 };
             });
-            
+
             // 全局重置函数
             window.resetAttributes = () => {
-                // 根据已完成卡牌数调整已完成卡牌数
+                // 根据已完成卡牌数调整已完成卡牌数 (重置到当前阶段的起点)
                 const currentCompleted = window.globalState.state.cardsCompleted;
-                if (currentCompleted <= 5) {
+                const cardsConfig = window.globalState.cardsPerPhase || { '启蒙期': 5, '成长期': 5, '青春期': 5 };
+
+                const t1 = cardsConfig['启蒙期'] || 0;
+                const t2 = t1 + (cardsConfig['成长期'] || 0);
+                // const t3 = t2 + (cardsConfig['青春期'] || 0);
+
+                if (currentCompleted <= t1) {
                     window.globalState.state.cardsCompleted = 0;
-                } else if (currentCompleted <= 10) {
-                    window.globalState.state.cardsCompleted = 5;
-                } else if (currentCompleted <= 15) {
-                    window.globalState.state.cardsCompleted = 10;
+                } else if (currentCompleted <= t2) {
+                    window.globalState.state.cardsCompleted = t1;
+                } else {
+                    window.globalState.state.cardsCompleted = t2;
                 }
-                
+
                 window.globalState.setAttributes({
                     '安全力': 3, '脑波力': 3, '实感力': 3, '创心力': 3, '沟通力': 3
                 });
-                
+
                 // 更新显示
-                document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/15`;
+                const target = window.globalState.targetCards || 15;
+                document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/${target}`;
                 document.getElementById('progress-display').innerHTML = '<p>伍力值已重置！请继续游戏。</p>';
                 document.getElementById('choice-display').innerHTML = '<p>等待选择...</p>';
             };
-            
             document.getElementById('progress-display').innerHTML = `<p>游戏已加载！共${window.CARD_DATA.length}张卡牌。</p>`;
             document.getElementById('choice-display').innerHTML = '<p>等待选择...</p>';
-            
+
             // 录音功能
             const recorder = new AudioRecorder();
             const recordBtn = document.getElementById('record-toggle');
             const waveCanvas = document.getElementById('mini-waveform');
             const recorderWidget = document.querySelector('.recorder-widget');
-            
+
             // 拖拽功能
             let isDragging = false;
             let dragOffset = { x: 0, y: 0 };
-            
+
             recorderWidget.addEventListener('mousedown', (e) => {
                 if (e.target === recordBtn) return;
                 isDragging = true;
@@ -1225,27 +1623,27 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
                 dragOffset.y = e.clientY - rect.top;
                 e.preventDefault();
             });
-            
+
             document.addEventListener('mousemove', (e) => {
                 if (!isDragging) return;
                 const x = e.clientX - dragOffset.x;
                 const y = e.clientY - dragOffset.y;
                 const maxX = window.innerWidth - recorderWidget.offsetWidth;
                 const maxY = window.innerHeight - recorderWidget.offsetHeight;
-                
+
                 recorderWidget.style.left = Math.max(0, Math.min(x, maxX)) + 'px';
                 recorderWidget.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
                 recorderWidget.style.right = 'auto';
                 recorderWidget.style.bottom = 'auto';
             });
-            
+
             document.addEventListener('mouseup', () => {
                 if (isDragging) {
                     isDragging = false;
                     recorderWidget.classList.remove('dragging');
                 }
             });
-            
+
             recordBtn.onclick = async () => {
                 if (!recorder.isRecording) {
                     const success = await recorder.startRecording();
@@ -1263,4 +1661,5 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
         });
     </script>
 </body>
+
 </html>
