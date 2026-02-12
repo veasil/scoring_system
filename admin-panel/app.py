@@ -656,7 +656,8 @@ def overview_page():
     today = datetime.date.today()
     if not sessions_df.empty:
         active_today = len(sessions_df[sessions_df['date'] == today])
-        avg_score = sessions_df['final_score'].mean()
+        scores = sessions_df['final_score'].dropna()
+        avg_score = scores.mean() if not scores.empty else 0
     else:
         active_today = 0
         avg_score = 0
@@ -736,41 +737,154 @@ def user_management_page():
     
     search_term = st.text_input("🔍 搜索用户 (手机号/ID/昵称)", "")
     
-    query = "SELECT * FROM users"
+    # 获取用户 + 场次统计的聚合数据
+    query = """
+        SELECT u.id, u.username, u.phone, u.guardian_name, u.role, u.created_at,
+               COUNT(g.id) as total_games,
+               COALESCE(AVG(CASE WHEN g.final_score IS NOT NULL AND g.final_score > 0 THEN g.final_score END), 0) as avg_score,
+               MAX(g.started_at) as last_played,
+               GROUP_CONCAT(DISTINCT g.game_mode) as modes_played
+        FROM users u
+        LEFT JOIN game_sessions g ON u.id = g.user_id
+    """
     params = ()
     if search_term:
-        query += " WHERE phone LIKE ? OR username LIKE ? OR id = ?"
+        query += " WHERE u.phone LIKE ? OR u.username LIKE ? OR u.id = ?"
         wildcard = f"%{search_term}%"
         params = (wildcard, wildcard, search_term)
+    query += " GROUP BY u.id ORDER BY total_games DESC"
     
     df = cached_run_query(query, params=params)
     
-    if isinstance(df, pd.DataFrame):
-        st.dataframe(df, use_container_width=True)
+    if not isinstance(df, pd.DataFrame) or df.empty:
+        st.info("暂无用户数据")
+        return
+    
+    # --- KPI ---
+    k1, k2, k3 = st.columns(3)
+    k1.metric("总用户数", len(df))
+    active_users = len(df[df['total_games'] > 0])
+    k2.metric("活跃用户 (≥1场)", active_users)
+    k3.metric("总游戏场次", int(df['total_games'].sum()))
+    
+    st.markdown("---")
+    
+    # --- 用户列表 ---
+    st.subheader("📋 用户列表")
+    display_df = df[['id', 'username', 'phone', 'guardian_name', 'role', 'total_games', 'avg_score', 'modes_played']].copy()
+    display_df['avg_score'] = display_df['avg_score'].apply(lambda x: f"{x:.0f}" if x else "--")
+    display_df.columns = ['ID', '昵称', '手机号', '守望师', '角色', '场次数', '平均分', '游戏模式']
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    
+    # --- 用户详情 ---
+    st.subheader("🔎 用户详情")
+    user_ids = df['id'].tolist()
+    selected_uid = st.selectbox("选择用户", user_ids, format_func=lambda x: f"User {x} — {df[df['id']==x].iloc[0].get('phone') or df[df['id']==x].iloc[0].get('username') or '未知'}")
+    
+    if selected_uid:
+        user_row = df[df['id'] == selected_uid].iloc[0]
         
-        # Admin Action Area
-        if st.session_state.user_role == 'admin':
-            st.divider()
-            st.subheader("⚡ 管理员操作")
-            c1, c2 = st.columns([1, 2])
-            with c1:
-                target_id = st.text_input("目标用户 ID")
-            with c2:
-                new_role = st.selectbox("设置权限等级", ["admin", "user", "guest"])
-                
-            if st.button("更新权限"):
-                if target_id:
-                    rows, err = db_utils.execute_update("UPDATE users SET role = ? WHERE id = ?", (new_role, target_id))
-                    if err:
-                        st.error(f"失败: {err}")
-                    elif rows > 0:
-                        st.success(f"用户 {target_id} 权限已更新为 {new_role}")
-                        time.sleep(1)
-                        st.rerun()
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            st.markdown(f"**📱 手机号**: {user_row.get('phone') or '未绑定'}")
+            st.markdown(f"**👤 昵称**: {user_row.get('username') or '未设置'}")
+            st.markdown(f"**🛡️ 守望师**: {user_row.get('guardian_name') or '未设置'}")
+            st.markdown(f"**🎮 总场次**: {int(user_row['total_games'])}   |   **📊 平均分**: {user_row['avg_score']:.0f}")
+            st.markdown(f"**🎯 游戏模式**: {user_row.get('modes_played') or '无记录'}")
+        
+        with c2:
+            st.markdown(f"**🔑 角色**: `{user_row.get('role') or 'user'}`")
+            if user_row.get('last_played'):
+                st.markdown(f"**🕐 最后游戏**: {format_ts(user_row['last_played'])}")
+        
+        # --- 该用户的游戏记录 ---
+        if int(user_row['total_games']) > 0:
+            st.markdown("##### 🎮 游戏记录")
+            sessions = cached_run_query(
+                "SELECT id, started_at, ended_at, final_score, game_mode, status FROM game_sessions WHERE user_id = ? ORDER BY started_at DESC",
+                params=(selected_uid,)
+            )
+            if isinstance(sessions, pd.DataFrame) and not sessions.empty:
+                sessions['时间'] = sessions['started_at'].apply(lambda x: format_ts(x) if x else '--')
+                sessions['得分'] = sessions['final_score'].apply(lambda x: str(int(x)) if pd.notna(x) and x > 0 else '--')
+                sessions['时长'] = sessions.apply(
+                    lambda r: format_duration(r['ended_at'] - r['started_at']) if r.get('ended_at') and r.get('started_at') and r['ended_at'] > r['started_at'] else '--', axis=1
+                )
+                st.dataframe(
+                    sessions[['id', '时间', 'game_mode', '得分', '时长', 'status']].rename(columns={'id':'Session ID', 'game_mode':'模式', 'status':'状态'}),
+                    use_container_width=True, hide_index=True
+                )
+        
+        # --- OSS 关联文件 ---
+        st.markdown("##### 📂 关联 OSS 文件")
+        st.caption(f"自动查找该用户上传的音频和复盘报告 (按 user_{selected_uid} 前缀匹配)")
+        
+        if st.session_state.get('token'):
+            headers = {"Authorization": f"Bearer {st.session_state.token}"}
+            
+            tab_audio, tab_report = st.tabs(["🎤 录音文件", "📝 复盘报告"])
+            
+            with tab_audio:
+                try:
+                    res = requests.get(f"{BACKEND_URL}/api/admin/oss/files", 
+                        params={"prefix": f"game-audio/user_{selected_uid}_", "maxKeys": 50, "delimiter": ""}, 
+                        headers=headers, timeout=5)
+                    if res.ok:
+                        files = res.json().get('files', [])
+                        if files:
+                            for f in files:
+                                name = f['name'].split('/')[-1]
+                                st.markdown(f"🎵 [{name}]({f['url']})  ({f['size']/1024:.1f} KB)")
+                        else:
+                            st.info("该用户暂无录音文件")
                     else:
-                        st.warning("未找到匹配的用户ID")
+                        st.warning(f"获取失败: {res.status_code}")
+                except Exception as e:
+                    st.warning(f"无法连接后端 API: {e}")
+            
+            with tab_report:
+                try:
+                    res = requests.get(f"{BACKEND_URL}/api/admin/oss/files", 
+                        params={"prefix": f"game-review/report_{selected_uid}_", "maxKeys": 50, "delimiter": ""}, 
+                        headers=headers, timeout=5)
+                    if res.ok:
+                        files = res.json().get('files', [])
+                        if files:
+                            for f in files:
+                                name = f['name'].split('/')[-1]
+                                icon = "📄" if name.endswith('.html') else "📋"
+                                st.markdown(f"{icon} [{name}]({f['url']})  ({f['size']/1024:.1f} KB)")
+                        else:
+                            st.info("该用户暂无复盘报告")
+                    else:
+                        st.warning(f"获取失败: {res.status_code}")
+                except Exception as e:
+                    st.warning(f"无法连接后端 API: {e}")
         else:
-            st.info("您当前权限无法修改用户信息。")
+            st.warning("未登录后端 API，无法查询 OSS 文件")
+    
+    # --- Admin Actions ---
+    if st.session_state.user_role == 'admin':
+        st.divider()
+        st.subheader("⚡ 管理员操作")
+        c1, c2 = st.columns([1, 2])
+        with c1:
+            target_id = st.text_input("目标用户 ID")
+        with c2:
+            new_role = st.selectbox("设置权限等级", ["admin", "user", "guest"])
+        if st.button("更新权限"):
+            if target_id:
+                rows, err = db_utils.execute_update("UPDATE users SET role = ? WHERE id = ?", (new_role, target_id))
+                if err:
+                    st.error(f"失败: {err}")
+                elif rows > 0:
+                    st.success(f"用户 {target_id} 权限已更新为 {new_role}")
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.warning("未找到匹配的用户ID")
 
 # --- Analysis Helpers ---
 
@@ -1565,19 +1679,60 @@ def data_audit_page():
                 st.warning(f"Session {sid} 已永久删除")
                 time.sleep(0.5)
                 st.rerun()
+
+    # Helper: Format duration from ms
+    def _fmt_duration(started_at, ended_at):
+        if started_at and ended_at:
+            try:
+                dur_ms = int(ended_at) - int(started_at)
+                if dur_ms <= 0:
+                    return "-"
+                return format_duration(dur_ms)
+            except:
+                pass
+        return "-"
                 
-    # --- Tab 1: Review ---
+    # --- Tab 1: Review (待审核) ---
     with tab_review:
-        to_review = cached_run_query("SELECT * FROM game_sessions WHERE status = 'flagged'")
+        # Enhanced query: join users, count cards
+        review_query = """
+            SELECT 
+                gs.*,
+                COALESCE(u.guardian_name, u.username, u.phone, 'Unknown') as user_display,
+                (SELECT COUNT(*) FROM game_events ge WHERE ge.session_id = gs.id AND ge.type = 'card_selected') as card_count
+            FROM game_sessions gs
+            LEFT JOIN users u ON gs.user_id = u.id
+            WHERE gs.status = 'flagged'
+            ORDER BY gs.id DESC
+        """
+        to_review = cached_run_query(review_query)
         if to_review.empty:
             st.info("🎉 没有待审核的记录")
         else:
             for _, row in to_review.iterrows():
-                with st.expander(f"Session {row['id']} | Score: {row['final_score']} | Time: {format_ts(row['started_at'])}"):
+                user_name = row.get('user_display', 'Unknown')
+                location = row.get('location', '-') or '-'
+                card_count = row.get('card_count', 0)
+                duration_str = _fmt_duration(row.get('started_at'), row.get('ended_at'))
+                
+                with st.expander(f"🆔 {row['id']} | 👤 {user_name} | 📍 {location} | 🎴 {card_count}张 | ⏱ {duration_str} | 得分: {row['final_score']}"):
                     cols = st.columns([3, 1])
                     with cols[0]:
-                        # Exclude big json fields
-                        st.json({k:v for k,v in row.to_dict().items() if k not in ['payload_json', 'players_json', 'game_settings_json', 'status']})
+                        # Show key fields in a structured way
+                        info_c1, info_c2 = st.columns(2)
+                        with info_c1:
+                            st.markdown(f"**用户:** {user_name}")
+                            st.markdown(f"**地点:** {location}")
+                            st.markdown(f"**游戏模式:** {row.get('game_mode', '-')}")
+                        with info_c2:
+                            st.markdown(f"**卡牌数量:** {card_count} 张")
+                            st.markdown(f"**游玩时长:** {duration_str}")
+                            st.markdown(f"**得分:** {row.get('final_score', '-')}")
+                        
+                        st.markdown(f"**开始时间:** {format_ts(row.get('started_at'))}")
+                        
+                        with st.expander("📋 原始数据", expanded=False):
+                            st.json({k:v for k,v in row.to_dict().items() if k not in ['payload_json', 'players_json', 'game_settings_json', 'status', 'user_display', 'card_count']})
                     with cols[1]:
                         st.markdown("**操作**")
                         render_actions(row['id'], 'flagged')
@@ -1600,10 +1755,89 @@ def data_audit_page():
                 st.markdown(f"**管理 Session {sid_to_manage}:**")
                 render_actions(sid_to_manage, 'trash')
 
-    # --- Tab 3: All ---
+    # --- Tab 3: All (全部列表 - 增强版) ---
     with tab_all:
-        all_data = cached_run_query("SELECT id, started_at, final_score, status, game_mode FROM game_sessions ORDER BY id DESC LIMIT 100")
-        st.dataframe(all_data, use_container_width=True)
+        st.caption("展示所有游戏场次，可手动标记待审核")
+        
+        # Enhanced query: join users, count cards, compute duration
+        all_query = """
+            SELECT 
+                gs.id,
+                gs.user_id,
+                COALESCE(u.guardian_name, u.username, u.phone, 'Unknown') as user_display,
+                gs.location,
+                gs.game_mode,
+                gs.started_at,
+                gs.ended_at,
+                gs.final_score,
+                gs.status,
+                (SELECT COUNT(*) FROM game_events ge WHERE ge.session_id = gs.id AND ge.type = 'card_selected') as card_count
+            FROM game_sessions gs
+            LEFT JOIN users u ON gs.user_id = u.id
+            ORDER BY gs.id DESC 
+            LIMIT 200
+        """
+        all_data = cached_run_query(all_query)
+        
+        if all_data.empty:
+            st.info("暂无数据")
+        else:
+            # Build display dataframe
+            display_rows = []
+            for _, row in all_data.iterrows():
+                duration_str = _fmt_duration(row.get('started_at'), row.get('ended_at'))
+                status_label = {
+                    'active': '🟢 有效', 
+                    'flagged': '🟠 待审核', 
+                    'trash': '🗑️ 回收站'
+                }.get(row.get('status') or 'active', row.get('status') or '🟢 有效')
+                
+                display_rows.append({
+                    'ID': row['id'],
+                    '用户': row.get('user_display', 'Unknown'),
+                    '地点': row.get('location') or '-',
+                    '卡牌数': row.get('card_count', 0),
+                    '游玩时长': duration_str,
+                    '得分': row.get('final_score', '-'),
+                    '模式': row.get('game_mode', '-'),
+                    '状态': status_label,
+                })
+            
+            display_df = pd.DataFrame(display_rows)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            
+            # Manual flag section
+            st.divider()
+            st.subheader("🔶 手动标记待审核")
+            
+            flag_col1, flag_col2 = st.columns([2, 1])
+            with flag_col1:
+                flag_sid = st.number_input(
+                    "输入 Session ID 标记为待审核", 
+                    min_value=1, step=1, key="manual_flag_sid"
+                )
+            with flag_col2:
+                st.write("") # Spacing
+                st.write("") # Align with input
+                if st.button("🔶 标记待审核", key="manual_flag_btn", use_container_width=True):
+                    # Check current status
+                    check = db_utils.run_query(
+                        "SELECT id, status FROM game_sessions WHERE id = ?", (flag_sid,)
+                    )
+                    if isinstance(check, pd.DataFrame) and not check.empty:
+                        current = check.iloc[0].get('status') or 'active'
+                        if current == 'flagged':
+                            st.warning(f"Session {flag_sid} 已经是待审核状态")
+                        else:
+                            db_utils.execute_update(
+                                "UPDATE game_sessions SET status = 'flagged' WHERE id = ?", 
+                                (flag_sid,)
+                            )
+                            st.success(f"✅ Session {flag_sid} 已标记为待审核")
+                            time.sleep(0.5)
+                            st.rerun()
+                    else:
+                        st.error(f"未找到 Session ID: {flag_sid}")
 
 
 # --- Main Layout ---
