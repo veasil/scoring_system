@@ -1,131 +1,39 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>《AI在5000天·伍力全开》伍力值计分系统</title>
-    <link rel="stylesheet" href="styles.css">
 
-    <style>
-        /* 登录区：不依赖 styles.css 的最小样式（避免你现有样式被破坏） */
-        .game-controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
+    <!-- 模块化 CSS -->
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/header.css">
+    <link rel="stylesheet" href="css/game.css">
+    <link rel="stylesheet" href="css/modal.css">
+    <link rel="stylesheet" href="css/animations.css">
+    <link rel="stylesheet" href="css/welcome.css">
+    <link rel="stylesheet" href="css/supervisor.css">
 
-        .auth-controls {
-            margin-left: auto;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
 
-        .auth-btn {
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: 1px solid rgba(0, 0, 0, .15);
-            background: #fff;
-            cursor: pointer;
-        }
-
-        .auth-btn.secondary {
-            background: rgba(0, 0, 0, .04);
-        }
-
-        .user-badge {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        /* 让 disabled 的“新游戏”更明显 */
-        button[disabled] {
-            opacity: .55;
-            cursor: not-allowed;
-        }
-
-        /* 登录模态框内容布局 */
-        .auth-modal-body {
-            max-width: 520px;
-        }
-
-        .auth-tabs {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 12px;
-        }
-
-        .auth-tab {
-            flex: 1;
-            padding: 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(0, 0, 0, .12);
-            background: #fff;
-            cursor: pointer;
-        }
-
-        .auth-tab.active {
-            background: rgba(102, 126, 234, .12);
-            border-color: rgba(102, 126, 234, .45);
-        }
-
-        .auth-form {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
-        .auth-form input {
-            padding: 10px;
-            border-radius: 10px;
-            border: 1px solid rgba(0, 0, 0, .15);
-        }
-
-        .auth-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        .auth-hint {
-            font-size: 12px;
-            opacity: .75;
-            line-height: 1.6;
-        }
-
-        .qr-box {
-            display: flex;
-            gap: 14px;
-            align-items: flex-start;
-        }
-
-        .qr-img {
-            width: 180px;
-            height: 180px;
-            border: 1px solid rgba(0, 0, 0, .12);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-        }
-
-        .qr-img img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-    </style>
-
+    <!-- 保留兼容性（可选） -->
+    <!-- <link rel="stylesheet" href="styles.css"> -->
 </head>
 
 <body>
+    <!-- 全屏欢迎页 -->
+    <div id="welcome-screen">
+        <canvas id="welcome-canvas"></canvas>
+        <div class="welcome-content">
+            <h1 class="welcome-title">欢迎来到AI 5000天<br>伍力全开的世界！</h1>
+            <p class="welcome-subtitle">开启您的伍力探索之旅</p>
+            <p class="click-hint">点击任意处穿越</p>
+        </div>
+    </div>
+
     <div id="app">
         <header class="game-header">
             <h1>《AI在5000天·伍力全开》伍力值计分系统</h1>
@@ -149,7 +57,9 @@
                 </div>
 
                 <div class="auth-controls">
-                    <button id="login-btn" class="auth-btn">登录</button>
+                    <button id="login-btn" class="auth-btn btn-premium gradient-primary">
+                        <i data-lucide="user"></i>登录
+                    </button>
                     <div id="user-badge" class="user-badge hidden">
                         <span id="user-name"></span>
                         <button id="logout-btn" class="auth-btn secondary">退出</button>
@@ -176,7 +86,9 @@
                             <button class="choice-btn" data-choice="C">C</button>
                         </div>
                     </div>
-                    <button id="submit-choice" class="submit-btn" disabled>确认选择</button>
+                    <button id="submit-choice" class="submit-btn btn-premium gradient-primary" disabled>
+                        确认选择
+                    </button>
                 </div>
 
                 <div class="skills-section">
@@ -240,12 +152,20 @@
 
         <footer class="game-footer">
             <div class="game-status">
-                <span id="current-phase">当前阶段: 启蒙期</span>
-                <span id="cards-completed">已完成: 0/15</span>
-                <span id="stage-failures">阶段失败: 0/3</span>
+                <span id="current-phase" title="卡牌阶段">当前阶段: 启蒙期</span>
+                <span id="cards-completed" title="完成进度">已完成: 0/15</span>
+                <button id="early-finish-btn" class="mini-status-btn" title="提前结束游戏" style="display:none;">
+                    结束
+                </button>
+                <span id="stage-failures" title="失败尝试">阶段失败: 0/3</span>
+            </div>
+            <div class="company-copyright">
+                © 2026 上海伍仟天数字科技有限公司 | 保留所有权利
             </div>
             <div class="game-actions">
-                <button id="new-game" class="action-btn" disabled title="请先登录后开始新游戏">新游戏</button>
+                <button id="new-game" class="action-btn btn-premium gradient-primary" disabled title="请先登录后开始新游戏">
+                    新游戏
+                </button>
                 <button id="review-history" class="action-btn">复盘</button>
                 <button id="pause-game" class="action-btn">暂停</button>
             </div>
@@ -311,13 +231,13 @@
                     <div class="auth-form">
                         <div class="auth-hint" style="margin-bottom: 15px; color: #666;">
                             <strong>开发者模式</strong><br />
-                            绕过短信验证，直接使用本地模拟登录。仅用于开发测试。
+                            输入开发者密钥以绕过验证。仅用于开发测试。
                         </div>
-                        <input id="dev-username" placeholder="输入任意用户名" style="margin-bottom: 10px;" />
+                        <input id="dev-key" type="password" placeholder="请输入开发者密钥" style="margin-bottom: 10px;" />
                         <button id="dev-login-btn" class="auth-btn"
-                            style="width: 100%; background: #28a745;">直接登录</button>
+                            style="width: 100%; background: #28a745; color: white;">验证并登录</button>
                         <div class="auth-hint" style="margin-top: 10px; font-size: 11px; opacity: 0.7;">
-                            注意：此模式仅在开发环境使用，生产环境请使用正常登录方式。
+                            注意：此模式仅在开发环境使用，需要正确的开发者密钥。
                         </div>
                     </div>
                 </div>
@@ -338,33 +258,38 @@
                     <p class="auth-hint">请录入本场游戏的基础信息，以便生成分析报告。</p>
 
                     <div class="auth-form" style="margin-top: 15px;">
-                        <label><strong>📍 游戏地点</strong></label>
-                        <input id="setup-location" placeholder="例如：XX社区活动中心、家里..." />
+                        <div class="input-group">
+                            <label><strong>📍 游戏地点</strong></label>
+                            <input id="setup-location" placeholder="例如：XX社区活动中心、家里..." />
+                        </div>
 
-                        <label style="margin-top: 10px;"><strong>👥 游戏人数分布</strong></label>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div>
-                                <label style="font-size: 12px; color: #666;">2-5岁 (启蒙期)</label>
-                                <input type="number" id="p-enlightenment" min="0" placeholder="0" />
-                            </div>
-                            <div>
-                                <label style="font-size: 12px; color: #666;">6-12岁 (成长期)</label>
-                                <input type="number" id="p-growth" min="0" placeholder="0" />
-                            </div>
-                            <div>
-                                <label style="font-size: 12px; color: #666;">13-18岁 (青春期)</label>
-                                <input type="number" id="p-adolescence" min="0" placeholder="0" />
-                            </div>
-                            <div>
-                                <label style="font-size: 12px; color: #666;">18岁+ (成年人)</label>
-                                <input type="number" id="p-adults" min="0" placeholder="0" />
+                        <div class="input-group">
+                            <label><strong>👥 游戏人数分布</strong></label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <div class="input-group">
+                                    <label style="font-size: 12px; color: rgba(255,255,255,0.6);">2-5岁 (启蒙期)</label>
+                                    <input type="number" id="p-enlightenment" min="0" placeholder="0" />
+                                </div>
+                                <div class="input-group">
+                                    <label style="font-size: 12px; color: rgba(255,255,255,0.6);">6-12岁 (成长期)</label>
+                                    <input type="number" id="p-growth" min="0" placeholder="0" />
+                                </div>
+                                <div class="input-group">
+                                    <label style="font-size: 12px; color: rgba(255,255,255,0.6);">13-18岁 (青春期)</label>
+                                    <input type="number" id="p-adolescence" min="0" placeholder="0" />
+                                </div>
+                                <div class="input-group">
+                                    <label style="font-size: 12px; color: rgba(255,255,255,0.6);">18岁+ (成年人)</label>
+                                    <input type="number" id="p-adults" min="0" placeholder="0" />
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="auth-actions" style="margin-top: 20px;">
-                        <button id="setup-next-btn" class="auth-btn"
-                            style="flex:1; background: #007bff; color: white;">下一页</button>
+                        <button id="setup-next-btn" class="auth-btn btn-premium gradient-primary" style="flex:1;">
+                            下一页
+                        </button>
                     </div>
                 </div>
 
@@ -373,7 +298,7 @@
                     <h2>⚡ 选择游戏模式 (2/2)</h2>
                     <p class="auth-hint">请选择适合当前场景的游戏模式。</p>
 
-                    <div class="mode-cards" style="display: flex; gap: 10px; margin-top: 15px;">
+                    <div class="mode-cards">
                         <div class="mode-choice-card selected" data-mode="standard">
                             <h4>标准版</h4>
                             <div class="mode-desc">体验 15 张卡牌</div>
@@ -395,32 +320,31 @@
                     </div>
 
                     <!-- Free Mode Config -->
-                    <div id="free-mode-config" class="hidden"
-                        style="margin-top: 15px; background: #f9f9f9; padding: 10px; border-radius: 8px;">
-                        <div style="display:flex; gap: 10px; align-items: center;">
+                    <div id="free-mode-config" class="hidden">
+                        <div class="config-row">
                             <label>总时长(秒):</label>
-                            <input type="number" id="free-duration" value="3600" style="width: 80px;" />
+                            <input type="number" id="free-duration" value="3600" style="width: 100px;" />
                         </div>
-                        <div style="margin-top: 8px;">
+                        <div class="input-group">
                             <label>卡牌数量配置:</label>
-                            <div style="display:flex; gap: 5px; margin-top: 5px;">
-                                <input type="number" id="free-c1" placeholder="启蒙" style="width: 50px;" />
-                                <input type="number" id="free-c2" placeholder="成长" style="width: 50px;" />
-                                <input type="number" id="free-c3" placeholder="青春" style="width: 50px;" />
+                            <div style="display:flex; gap: 10px; margin-top: 5px;">
+                                <input type="number" id="free-c1" placeholder="启蒙" style="flex:1;" />
+                                <input type="number" id="free-c2" placeholder="成长" style="flex:1;" />
+                                <input type="number" id="free-c3" placeholder="青春" style="flex:1;" />
                             </div>
-                            <div class="auth-hint">建议每张卡牌预留5分钟。总数≥7张。</div>
+                            <div class="auth-hint" style="font-size: 11px;">建议每张卡牌预留5分钟。总数≥7张。</div>
                         </div>
                     </div>
 
-                    <div
-                        style="margin-top: 15px; font-size: 12px; color: #888; background: #fffbe6; padding: 8px; border-radius: 4px;">
-                        💡 备注：暂时以标准版5-5-5，精华版3-3-3为固定卡牌设定。仍需提升智能性。
+                    <div class="setup-tip">
+                        <span>提示：标准版固定为 5-5-5，精华版为 3-3-3 分布。</span>
                     </div>
 
                     <div class="auth-actions" style="margin-top: 20px;">
                         <button id="setup-back-btn" class="auth-btn secondary">上一步</button>
-                        <button id="setup-start-btn" class="auth-btn"
-                            style="flex:1; background: #28a745; color: white;">开始游戏</button>
+                        <button id="setup-start-btn" class="auth-btn btn-premium gradient-primary" style="flex:1;">
+                            开始游戏
+                        </button>
                     </div>
                 </div>
 
@@ -480,7 +404,8 @@
         <canvas id="mini-waveform" width="120" height="30"></canvas>
     </div>
 
-    <script src="cards-data.js"></script>
+    <!-- <script src="cards-data.js"></script> -->
+    <script src="js/starfield.js"></script>
     <script src="global-state.js"></script>
     <script src="supervisor-controller.js"></script>
     <script src="audio-recorder.js"></script>
@@ -488,9 +413,28 @@
     <script src="game-review.js"></script>
     <script src="advanced-review.js"></script>
     <script>
-        window.addEventListener('load', () => {
+        window.addEventListener('load', async () => {
+            // Fetch cards data and settings
+            try {
+                // 加载系统配置
+                await loadSystemSettings();
+
+                const res = await fetch('/api/cards');
+                if (res.ok) {
+                    const data = await res.json();
+                    window.CARD_DATA = data.cards;
+                    console.log('Loaded cards from API:', window.CARD_DATA.length);
+                } else {
+                    console.error('Failed to load cards data:', res.status);
+                    document.getElementById('progress-display').innerHTML = '<p>卡牌数据加载失败，请刷新重试</p>';
+                }
+            } catch (e) {
+                console.error('Error loading cards data', e);
+                document.getElementById('progress-display').innerHTML = '<p>网络错误，卡牌数据加载失败</p>';
+            }
+
             if (!window.CARD_DATA || !window.globalState) {
-                document.getElementById('progress-display').innerHTML = '<p>加载失败</p>';
+                document.getElementById('progress-display').innerHTML = '<p>系统初始化失败 (Missing Data or GlobalState)</p>';
                 return;
             }
 
@@ -499,6 +443,116 @@
             let hasStartedNewGame = false; // 跟踪是否已按新游戏
             let skillsUsed = { '安全力': false, '脑波力': false, '实感力': false, '创心力': false, '沟通力': false };
             let creativeOptions = {}; // 存储创心力技能的选项D
+            let systemSettings = {}; // 全局系统配置
+
+            async function loadSystemSettings() {
+                try {
+                    const data = await api('/api/settings');
+                    if (data.ok && data.settings) {
+                        data.settings.forEach(s => {
+                            systemSettings[s.key] = s.value;
+                        });
+                        console.log('System settings loaded:', systemSettings);
+
+                        // 1. 应用品牌信息
+                        if (systemSettings.BRANDING_INFO) {
+                            try {
+                                const branding = JSON.parse(systemSettings.BRANDING_INFO);
+                                if (branding.title) {
+                                    document.title = branding.title;
+                                    const headerTitle = document.querySelector('.game-header h1');
+                                    if (headerTitle) headerTitle.textContent = branding.title;
+                                }
+                                if (branding.welcome_title) {
+                                    const welcomeTitle = document.querySelector('.welcome-title');
+                                    if (welcomeTitle) welcomeTitle.innerHTML = branding.welcome_title;
+                                }
+                                if (branding.copyright) {
+                                    const copyrightBox = document.querySelector('.company-copyright');
+                                    if (copyrightBox) copyrightBox.textContent = branding.copyright;
+                                }
+                            } catch (e) { console.error('Failed to parse BRANDING_INFO', e); }
+                        }
+
+                        // 2. 应用游戏模式定义
+                        if (systemSettings.GAME_MODES) {
+                            try {
+                                const modes = JSON.parse(systemSettings.GAME_MODES);
+                                renderGameModes(modes);
+                            } catch (e) { console.error('Failed to parse GAME_MODES', e); }
+                        }
+
+                        // 3. 初始 GlobalState
+                        if (window.globalState) {
+                            const config = { ...systemSettings };
+                            if (systemSettings.ATTRIBUTES_CONFIG) {
+                                try { config.attributes = JSON.parse(systemSettings.ATTRIBUTES_CONFIG); } catch (e) { }
+                            }
+                            window.globalState.initialize(config);
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to load system settings, using defaults.', e);
+                }
+            }
+
+            function renderGameModes(modes) {
+                const container = document.querySelector('.mode-cards');
+                if (!container) return;
+
+                container.innerHTML = '';
+                modes.forEach((m, index) => {
+                    const card = document.createElement('div');
+                    card.className = `mode-choice-card ${index === 0 ? 'selected' : ''}`;
+                    card.dataset.mode = m.id;
+                    if (index === 0) setupData.mode = m.id; // 默认选中第一个
+
+                    card.innerHTML = `
+                        <h4>${m.name}</h4>
+                        <div class="mode-desc">${m.desc}</div>
+                        <div class="mode-time">${m.time}秒</div>
+                        <div class="mode-detail">${m.detail}</div>
+                    `;
+
+                    card.onclick = () => {
+                        document.querySelectorAll('.mode-choice-card').forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        setupData.mode = m.id;
+                        setupData.currentModeConfig = m; // 存下当前配置
+
+                        const freeConfig = document.getElementById('free-mode-config');
+                        if (m.id === 'free') {
+                            freeConfig.classList.remove('hidden');
+                            document.getElementById('setup-start-btn').textContent = '自定义开始';
+                        } else {
+                            freeConfig.classList.add('hidden');
+                            document.getElementById('setup-start-btn').textContent = '开始游戏';
+                        }
+                    };
+                    container.appendChild(card);
+                });
+
+                // 总是添加自由版（如果配置里没写的话，通常建议配置里包含）
+                if (!modes.find(m => m.id === 'free')) {
+                    const freeCard = document.createElement('div');
+                    freeCard.className = 'mode-choice-card';
+                    freeCard.dataset.mode = 'free';
+                    freeCard.innerHTML = `
+                        <h4>自由版</h4>
+                        <div class="mode-desc">自定义设置</div>
+                        <div class="mode-time">自定义</div>
+                        <div class="mode-detail">不少于7张</div>
+                    `;
+                    freeCard.onclick = () => {
+                        document.querySelectorAll('.mode-choice-card').forEach(c => c.classList.remove('selected'));
+                        freeCard.classList.add('selected');
+                        setupData.mode = 'free';
+                        document.getElementById('free-mode-config').classList.remove('hidden');
+                        document.getElementById('setup-start-btn').textContent = '自定义开始';
+                    };
+                    container.appendChild(freeCard);
+                }
+            }
 
             // ========== 登录状态（前端） ==========
             const authState = {
@@ -692,26 +746,21 @@
             };
 
             // 开发者模式登录
-            const devUsernameInput = document.getElementById('dev-username');
+            const devKeyInput = document.getElementById('dev-key');
             const devLoginBtn = document.getElementById('dev-login-btn');
 
             devLoginBtn.onclick = async () => {
-                const username = devUsernameInput.value.trim() || 'dev_user';
-                try {
-                    // 先尝试注册（如果用户不存在）
-                    try {
-                        await api('/api/auth/register', {
-                            method: 'POST',
-                            body: { username, password: 'dev123456' }
-                        });
-                    } catch (e) {
-                        // 如果注册失败（可能用户已存在），就直接登录
-                    }
+                const key = devKeyInput.value.trim();
+                if (!key) return;
 
-                    // 登录
-                    const ret = await api('/api/auth/login', {
+                devLoginBtn.disabled = true;
+                devLoginBtn.textContent = '验证中...';
+
+                try {
+                    // 调用后端验证接口，不再在前端硬编码 Check
+                    const ret = await api('/api/auth/dev-login', {
                         method: 'POST',
-                        body: { username, password: 'dev123456' }
+                        body: { key }
                     });
 
                     authState.token = ret.token;
@@ -721,7 +770,10 @@
                     closeAuthModal();
                     alert('开发者模式登录成功！');
                 } catch (err) {
-                    alert('开发者模式登录失败：' + err.message);
+                    alert('登录失败：' + err.message);
+                } finally {
+                    devLoginBtn.disabled = false;
+                    devLoginBtn.textContent = '验证并登录';
                 }
             };
 
@@ -767,9 +819,39 @@
                 }
             };
 
-            // 启动时校验登录
-            initAuth();
-            // ========== 登录状态（前端） end ==========
+            // 提前结束按钮逻辑
+            const earlyFinishBtn = document.getElementById('early-finish-btn');
+            if (earlyFinishBtn) {
+                earlyFinishBtn.onclick = () => {
+                    if (confirm('⚠️ 确定要提前结束当前游戏吗？\n\n这将立即结算当前分数并生成复盘报告。')) {
+                        finalizeSession('early_finish');
+                    }
+                };
+            }
+
+            // 更新游戏阶段显示（增加按钮显示逻辑）
+            const originalUpdateGameInfo = window.updateGameInfo; // Backup global function if exists
+            // Or better, hook into where game status changes. 
+            // Since we don't have a centralized event for UI update in this script except `supervisor-controller` or `global-state`, 
+            // we'll use a timer or hook into existing functions?
+            // Actually, we can hook into globalState listener.
+
+            if (window.globalState) {
+                window.globalState.addListener((type, newVal, oldVal, state) => {
+                    if (type === 'gameStatus') {
+                        if (newVal === 'playing') {
+                            earlyFinishBtn.style.display = 'inline-flex';
+                        } else {
+                            earlyFinishBtn.style.display = 'none';
+                        }
+                    }
+                });
+
+                // Init state
+                if (window.globalState.state.gameStatus === 'playing') {
+                    earlyFinishBtn.style.display = 'inline-flex';
+                }
+            }
 
 
             // 音效系统已移至 sound-effects.js
@@ -1436,11 +1518,7 @@
             // Start Game Confirm
             document.getElementById('setup-start-btn').onclick = async () => {
                 // Config based on mode
-                if (setupData.mode === 'standard') {
-                    setupData.settings = { duration: 5000, targetCards: 15, cardsPerPhase: { '启蒙期': 5, '成长期': 5, '青春期': 5 } };
-                } else if (setupData.mode === 'essence') {
-                    setupData.settings = { duration: 3600, targetCards: 9, cardsPerPhase: { '启蒙期': 3, '成长期': 3, '青春期': 3 } };
-                } else {
+                if (setupData.mode === 'free') {
                     const dur = parseInt(document.getElementById('free-duration').value) || 3600;
                     const c1 = parseInt(document.getElementById('free-c1').value) || 0;
                     const c2 = parseInt(document.getElementById('free-c2').value) || 0;
@@ -1452,6 +1530,19 @@
                         duration: dur,
                         targetCards: total,
                         cardsPerPhase: { '启蒙期': c1, '成长期': c2, '青春期': c3 }
+                    };
+                } else {
+                    // 从动态配置中查找选中的模式
+                    let modes = [];
+                    try { modes = JSON.parse(systemSettings.GAME_MODES || '[]'); } catch (e) { }
+                    const activeMode = modes.find(m => m.id === setupData.mode) ||
+                        (setupData.mode === 'standard' ? { time: 5000, targetCards: 15, distribution: { '启蒙期': 5, '成长期': 5, '青春期': 5 } } :
+                            { time: 3600, targetCards: 9, distribution: { '启蒙期': 3, '成长期': 3, '青春期': 3 } });
+
+                    setupData.settings = {
+                        duration: activeMode.time,
+                        targetCards: activeMode.targetCards,
+                        cardsPerPhase: activeMode.distribution
                     };
                 }
 
@@ -1652,12 +1743,13 @@
                         recordBtn.style.color = '#dc3545';
                         recorder.drawWaveform(waveCanvas);
                     }
-                } else {
-                    recorder.stopRecording();
-                    recordBtn.textContent = '●';
-                    recordBtn.style.color = '#28a745';
                 }
             };
+
+            // 初始化 Lucide 图标
+            if (window.lucide) {
+                window.lucide.createIcons();
+            }
         });
     </script>
 </body>

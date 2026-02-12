@@ -1,0 +1,27 @@
+/* Mini status button in footer */
+.mini-status-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 2px 8px;
+    margin-left: 8px;
+    background: rgba(255, 193, 7, 0.2);
+    border: 1px solid rgba(255, 193, 7, 0.5);
+    color: #ffd54f;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+    line-height: 1.2;
+}
+
+.mini-status-btn:hover {
+    background: rgba(255, 193, 7, 0.3);
+    transform: translateY(-1px);
+}
+
+.mini-status-btn i {
+    width: 12px;
+    height: 12px;
+}

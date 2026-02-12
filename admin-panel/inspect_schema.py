@@ -1,23 +1,28 @@
-import sqlite3
 import pandas as pd
 import os
+import sys
 
-db_path = os.path.join(os.path.dirname(os.getcwd()), 'data', 'wqt.db').replace('\\', '/')
-conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
-cursor = conn.cursor()
+# Add current directory to path to allow import
+sys.path.append(os.path.dirname(__file__))
 
-# Get all tables
-cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
-tables = cursor.fetchall()
-print("Tables:", [t[0] for t in tables])
+import db_utils
 
-for table_name in tables:
-    t = table_name[0]
-    print(f"\n--- Schema for {t} ---")
-    cursor.execute(f"PRAGMA table_info({t})")
-    columns = cursor.fetchall()
-    # cid, name, type, notnull, dflt_value, pk
-    for col in columns:
-        print(f"{col[1]} ({col[2]})")
+print("Initializing DB...")
+# db_utils.init_db() is called on import
 
-conn.close()
+print("Inspecting Schema...")
+tables_df = db_utils.get_all_tables()
+if isinstance(tables_df, pd.DataFrame):
+     tables = tables_df['name'].tolist()
+     print("Tables:", tables)
+
+     if 'system_settings' in tables:
+         print("\n--- Schema for system_settings ---")
+         # We can't use db_utils.run_query for PRAGMA easily if it expects SELECT usually?
+         # db_utils.run_query uses read_sql_query which supports any SQL that returns rows.
+         schema = db_utils.run_query("PRAGMA table_info(system_settings)")
+         print(schema)
+     else:
+         print("ERROR: system_settings table NOT found!")
+else:
+    print("Error getting tables:", tables_df)

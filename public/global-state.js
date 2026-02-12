@@ -15,14 +15,43 @@ class GlobalState {
             // 历史记录
             gameHistory: [],
             // 当前模式
-            displayMode: 'tabletop', // tabletop, player, supervisor
+            displayMode: 'standard', // standard, player, supervisor
             // 统计信息
             cardsCompleted: 0,
-            stageFailures: 0
+            stageFailures: 0,
+            // 属性限制
+            attributeLimits: { min: 0, max: 10, failureThreshold: 0 } // 动态属性限制
         };
-        
+
         this.listeners = new Set();
         this.systems = {};
+    }
+
+    // 初始化配置
+    initialize(config = {}) {
+        if (config.DEFAULT_GAME_TIME) {
+            this.setDefaultTime(parseInt(config.DEFAULT_GAME_TIME));
+        }
+
+        // 属性范围配置
+        if (config.attributes) {
+            const attrConfig = config.attributes;
+            this.state.attributeLimits = {
+                min: attrConfig.min !== undefined ? attrConfig.min : 0,
+                max: attrConfig.max !== undefined ? attrConfig.max : 10,
+                failureThreshold: attrConfig.failureThreshold !== undefined ? attrConfig.failureThreshold : 0
+            };
+
+            // 如果提供了初始值，且游戏尚未开始，则应用初始值
+            if (attrConfig.initial !== undefined && this.state.gameStatus === 'stopped') {
+                const initialVal = attrConfig.initial;
+                Object.keys(this.state.attributes).forEach(key => {
+                    this.state.attributes[key] = initialVal;
+                });
+            }
+        }
+
+        console.log('GlobalState initialized with config:', config);
     }
 
     // 注册系统组件
@@ -51,7 +80,8 @@ class GlobalState {
     updateAttribute(name, value) {
         if (this.state.attributes.hasOwnProperty(name)) {
             const oldValue = this.state.attributes[name];
-            this.state.attributes[name] = Math.max(0, Math.min(10, value));
+            const limits = this.state.attributeLimits;
+            this.state.attributes[name] = Math.max(limits.min, Math.min(limits.max, value));
             this.notifyListeners('attribute', { name, value: this.state.attributes[name], oldValue });
         }
     }
@@ -59,9 +89,10 @@ class GlobalState {
     // 批量更新属性
     updateAttributes(changes) {
         const oldAttributes = { ...this.state.attributes };
+        const limits = this.state.attributeLimits;
         Object.entries(changes).forEach(([attr, change]) => {
             if (this.state.attributes.hasOwnProperty(attr)) {
-                this.state.attributes[attr] = Math.max(0, Math.min(10, this.state.attributes[attr] + change));
+                this.state.attributes[attr] = Math.max(limits.min, Math.min(limits.max, this.state.attributes[attr] + change));
             }
         });
         this.notifyListeners('attributes', this.state.attributes, oldAttributes);
@@ -104,7 +135,7 @@ class GlobalState {
         } else {
             entry.type = 'card_choice';
         }
-        
+
         this.state.gameHistory.push(entry);
         this.notifyListeners('historyAdded', entry);
     }

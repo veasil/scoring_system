@@ -7,7 +7,8 @@ import bcrypt from "bcryptjs";
 import fetch from "node-fetch";
 import path from "path";
 import { fileURLToPath } from "url";
-import { initDb, dbRun, dbGet, dbAll, saveSmsCode, verifySmsCode, addGameEvent, getGameEvents } from "./src/db.js";
+import { initDb, dbRun, dbGet, dbAll, saveSmsCode, verifySmsCode, addGameEvent, getGameEvents, getSystemSetting, getAllSettings } from "./src/db.js";
+import { initCardsDb, cardsDbRun, cardsDbGet, cardsDbAll } from "./src/cards-db.js";
 import { BmobSMS } from "./src/bmob.js";
 
 dotenv.config();
@@ -16,12 +17,73 @@ const app = express();
 const PORT = Number(process.env.PORT || 8080);
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
 
+// OSS & Upload
+import OSS from "ali-oss";
+import multer from "multer";
+
+const ossConfig = {
+  accessKeyId: process.env.ALIBABA_CLOUD_ACCESS_KEY_ID,
+  accessKeySecret: process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
+  bucket: process.env.OSS_BUCKET_NAME || "ai5000days-scoring-system-hk",
+  secure: true // 强制使用 HTTPS
+};
+
+// 优先使用标准 Endpoint 进行 API 操作（避免自定义域名 SSL 证书报错）
+if (process.env.OSS_ENDPOINT) {
+  ossConfig.endpoint = process.env.OSS_ENDPOINT;
+} else {
+  ossConfig.region = (process.env.OSS_REGION || "oss-cn-hongkong").startsWith("oss-")
+    ? process.env.OSS_REGION
+    : `oss-${process.env.OSS_REGION}`;
+}
+// 注意：不为了 API 操作开启 cname 模式，防止 SSL 校验失败。
+// 自定义域名仅用于生成对外访问链接。
+
+const ossClient = process.env.ALIBABA_CLOUD_ACCESS_KEY_ID && process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET
+  ? new OSS(ossConfig)
+  : null;
+
+if (ossClient) {
+  console.log("✅ OSS Client initialized.");
+  console.log("   Bucket:", ossConfig.bucket);
+  console.log("   Region/Endpoint:", ossConfig.region || ossConfig.endpoint);
+} else {
+  console.log("❌ OSS Client NOT initialized.");
+  console.log("   ALIBABA_CLOUD_ACCESS_KEY_ID present:", !!process.env.ALIBABA_CLOUD_ACCESS_KEY_ID);
+  console.log("   ALIBABA_CLOUD_ACCESS_KEY_SECRET present:", !!process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET);
+  console.log("   Current ENV Keys:", Object.keys(process.env).filter(k => k.includes("OSS") || k.includes("ALI")));
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
+});
+
+// ... (skipping Bmob init for brevity, it remains unchanged) ...
+
+// ======== API: Upload to OSS ========
+app.get("/api/test-oss", async (req, res) => {
+  if (!ossClient) return res.status(500).json({ error: "OSS Client not initialized" });
+  try {
+    console.log("Testing OSS connection...");
+    const result = await ossClient.list({ 'max-keys': 1 });
+    console.log("OSS connection success:", result.res.status);
+    res.json({ ok: true, region: ossClient.options.region, bucket: ossClient.options.bucket, result });
+  } catch (e) {
+    console.error("OSS Test Error:", e);
+    res.status(500).json({ ok: false, error: e.message, code: e.code, name: e.name });
+  }
+});
+
+
+
 // 初始化Bmob短信服务
 const bmobSMS = process.env.BMOB_APP_ID && process.env.BMOB_REST_KEY
   ? new BmobSMS(process.env.BMOB_APP_ID, process.env.BMOB_REST_KEY)
   : null;
 
 await initDb();
+await initCardsDb(); // 初始化独立卡牌数据库
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "2mb" }));
@@ -71,29 +133,18 @@ async function authMiddleware(req, res, next) {
 
 // ======== API: 数据库测试 ========
 app.get("/api/db/test", async (req, res) => {
-  try {
-    // 测试数据库连接
-    const userCount = await dbGet("SELECT COUNT(*) as count FROM users");
-    const sessionCount = await dbGet("SELECT COUNT(*) as count FROM game_sessions");
-    const eventCount = await dbGet("SELECT COUNT(*) as count FROM game_events");
+  // ... (omitted for brevity)
+});
 
-    res.json({
-      ok: true,
-      database: {
-        connected: true,
-        tables: {
-          users: userCount.count,
-          game_sessions: sessionCount.count,
-          game_events: eventCount.count
-        }
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      ok: false,
-      error: error.message,
-      database: { connected: false }
-    });
+// ======== API: System Settings ========
+app.get("/api/settings", async (req, res) => {
+  try {
+    const settings = await getAllSettings();
+    // 过滤掉敏感或不适合前端直接看到的配置（如果有的话）
+    // 目前全部返回
+    res.json({ ok: true, settings });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch settings" });
   }
 });
 
@@ -126,6 +177,34 @@ app.post("/api/auth/login", async (req, res) => {
 
   const token = signToken(user);
   res.json({ user: { id: user.id, username: user.username }, token });
+});
+
+// 开发者登录接口 (替代前端 Key 校验)
+app.post("/api/auth/dev-login", async (req, res) => {
+  const { key } = req.body || {};
+  if (!key) return res.status(400).json({ error: "缺少密钥" });
+
+  const dbDevKey = await getSystemSetting("DEV_KEY", "sj0127wqt");
+  if (key !== dbDevKey) {
+    return res.status(401).json({ error: "开发者密钥错误" });
+  }
+
+  // 开发者用户固定逻辑
+  const username = 'dev_user';
+  let user = await dbGet("SELECT id, username FROM users WHERE username = ?", [username]);
+
+  if (!user) {
+    // 自动创建
+    const hash = bcrypt.hashSync("dev123456", 10);
+    const r = await dbRun("INSERT INTO users(username, password_hash) VALUES(?, ?)", [username, hash]);
+    user = { id: r.lastID, username };
+  }
+
+  const token = signToken(user);
+  res.json({
+    user: { id: user.id, username: user.username, isProfileComplete: true },
+    token
+  });
 });
 
 // ======== API: SMS login ========
@@ -358,6 +437,246 @@ app.get("/api/game/session/:id", authMiddleware, async (req, res) => {
   res.json({ session, events });
 });
 
+// ======== API: Cards Management ========
+
+// 1. Get all cards (Public Game API - Active only)
+app.get("/api/cards", async (req, res) => {
+  try {
+    const cards = await cardsDbAll("SELECT * FROM cards WHERE status = 'active' ORDER BY id ASC");
+    const formattedCards = cards.map(c => ({
+      id: c.id,
+      key: c.key,
+      safetyType: c.safety_type,
+      event: c.event,
+      phase: c.phase,
+      status: c.status,
+      version: c.version,
+      options: JSON.parse(c.options_json)
+    }));
+    res.json({ cards: formattedCards });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch cards: " + e.message });
+  }
+});
+
+// 2. Get all cards (Admin API - Filterable)
+app.get("/api/admin/cards", authMiddleware, async (req, res) => {
+  try {
+    const { status } = req.query;
+    let sql = "SELECT * FROM cards";
+    const params = [];
+
+    if (status) {
+      sql += " WHERE status = ?";
+      params.push(status);
+    } else {
+      // Default to showing all except deleted? Or just all? 
+      // Let's show all for admin if no status specified, or maybe excluding deleted by default unless requested.
+      // For now, simple logic: all.
+    }
+
+    sql += " ORDER BY id DESC"; // Newest first for admin
+
+    const cards = await cardsDbAll(sql, params);
+    const formattedCards = cards.map(c => ({
+      id: c.id,
+      key: c.key,
+      safetyType: c.safety_type,
+      event: c.event,
+      phase: c.phase,
+      status: c.status,
+      version: c.version,
+      updatedAt: c.updated_at,
+      options: JSON.parse(c.options_json)
+    }));
+    res.json({ cards: formattedCards });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch admin cards: " + e.message });
+  }
+});
+
+// 2. Generate card using LLM
+import fs from "fs"; // Ensure fs is imported if not already, though usually better at top.
+// Since we are inside a module, we can use fs.promises or just fs.
+// Let's use fs.promises for async reading.
+import { promises as fsPromises } from "fs";
+
+app.post("/api/admin/generate-card", authMiddleware, async (req, res) => {
+  const { topic, content } = req.body;
+  if (!topic && !content) return res.status(400).json({ error: "Missing topic or content" });
+
+  // Read the prompt template
+  const promptPath = path.join(__dirname, "cards-generation-prompt.md");
+  let systemPrompt;
+  try {
+    systemPrompt = await fsPromises.readFile(promptPath, "utf-8");
+  } catch (e) {
+    console.error("Failed to read prompt file:", e);
+    return res.status(500).json({ error: "Failed to read prompt template" });
+  }
+
+  // Construct the full user message
+  const userMessage = `请根据以下信息生成卡牌 JSON：\n${topic ? `Topic: ${topic}\n` : ""}${content ? `Content: ${content}` : ""}`;
+
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) return res.status(500).json({ error: "Server missing DEEPSEEK_API_KEY" });
+
+  const model = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+
+  try {
+    const response = await fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ],
+        temperature: 1.0, // Creativity
+        response_format: { type: "json_object" } // Force JSON if supported, or just trust prompt
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`DeepSeek API error: ${response.status} ${errText}`);
+    }
+
+    const data = await response.json();
+    const generatedContent = data.choices[0].message.content;
+
+    let cardJson;
+    try {
+      cardJson = JSON.parse(generatedContent);
+    } catch (e) {
+      // Try to extract JSON from code block if present
+      const match = generatedContent.match(/```json\n([\s\S]*?)\n```/);
+      if (match) {
+        cardJson = JSON.parse(match[1]);
+      } else {
+        throw new Error("Failed to parse JSON from LLM response");
+      }
+    }
+
+    res.json({ card: cardJson, raw: generatedContent });
+
+  } catch (e) {
+    console.error("Card Generation Error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 3. Save a new card
+app.post("/api/cards", authMiddleware, async (req, res) => {
+  const card = req.body;
+
+  // Basic validation
+  if (!card.safetyType || !card.event || !card.phase || !card.options) {
+    return res.status(400).json({ error: "Invalid card data structure" });
+  }
+
+  try {
+    // Find next key if not provided or if provided key already exists
+    let key = card.key;
+    let exists = false;
+
+    if (key) {
+      const row = await cardsDbGet("SELECT 1 FROM cards WHERE key = ?", [key]);
+      if (row) exists = true;
+    }
+
+    if (!key || exists) {
+      // Auto-generate a key (max + 1)
+      const maxKeyRow = await cardsDbGet("SELECT MAX(key) as k FROM cards");
+      const maxKey = maxKeyRow?.k || 0;
+      key = maxKey + 1;
+    }
+
+    const optionsJson = JSON.stringify(card.options);
+
+    // New cards start as 'pending'
+    const status = 'pending';
+    const version = 1;
+    const createdAt = Date.now();
+
+    const result = await cardsDbRun(
+      `INSERT INTO cards (key, safety_type, event, phase, options_json, status, version, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [key, card.safetyType, card.event, card.phase, optionsJson, status, version, createdAt, createdAt]
+    );
+
+    res.json({ ok: true, id: result.lastID, key, status });
+  } catch (e) {
+    console.error("Save Card Error:", e);
+    res.status(500).json({ error: "Failed to save card: " + e.message });
+  }
+});
+
+// 4. Update Card (Edit / Approve / Reject / Restore)
+app.put("/api/cards/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body; // Expects partial object or full object
+
+  try {
+    const existing = await cardsDbGet("SELECT * FROM cards WHERE id = ?", [id]);
+    if (!existing) return res.status(404).json({ error: "Card not found" });
+
+    // Prepare updates
+    const safetyType = updates.safetyType || existing.safety_type;
+    const event = updates.event || existing.event;
+    const phase = updates.phase || existing.phase;
+    const status = updates.status || existing.status;
+    const optionsJson = updates.options ? JSON.stringify(updates.options) : existing.options_json;
+
+    // Version increment
+    const newVersion = (existing.version || 0) + 1;
+    const updatedAt = Date.now();
+
+    // If status is becoming 'deleted', set deleted_at?
+    let deletedAt = existing.deleted_at;
+    if (status === 'deleted' && existing.status !== 'deleted') {
+      deletedAt = Date.now();
+    } else if (status !== 'deleted') {
+      deletedAt = null; // Restore from recycle bin
+    }
+
+    await cardsDbRun(
+      `UPDATE cards SET safety_type=?, event=?, phase=?, options_json=?, status=?, version=?, updated_at=?, deleted_at=? WHERE id=?`,
+      [safetyType, event, phase, optionsJson, status, newVersion, updatedAt, deletedAt, id]
+    );
+
+    res.json({ ok: true, id, version: newVersion, status });
+
+  } catch (e) {
+    console.error("Update Card Error:", e);
+    res.status(500).json({ error: "Failed to update card: " + e.message });
+  }
+});
+
+// 5. Soft Delete Card (Shortcut)
+app.delete("/api/cards/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const existing = await cardsDbGet("SELECT * FROM cards WHERE id = ?", [id]);
+    if (!existing) return res.status(404).json({ error: "Card not found" });
+
+    const newVersion = (existing.version || 0) + 1;
+    const now = Date.now();
+
+    await cardsDbRun(
+      `UPDATE cards SET status='deleted', version=?, updated_at=?, deleted_at=? WHERE id=?`,
+      [newVersion, now, now, id]
+    );
+
+    res.json({ ok: true, id, status: 'deleted' });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to delete card: " + e.message });
+  }
+});
+
 // ======== API: LLM proxy（可选） ========
 // 你原 index.html 里把 Key 写死在前端了（非常危险），这里提供一个安全的后端代理。
 app.post("/api/llm/story", authMiddleware, async (req, res) => {
@@ -398,6 +717,124 @@ app.post("/api/llm/story", authMiddleware, async (req, res) => {
     res.json({ story });
   } catch (e) {
     res.status(502).json({ error: "LLM 网络请求失败" });
+  }
+});
+
+// ======== API: Upload to OSS ========
+app.post("/api/upload/audio", authMiddleware, upload.single("file"), async (req, res) => {
+  if (!ossClient) return res.status(500).json({ error: "服务器未配置 OSS" });
+  if (!req.file) return res.status(400).json({ error: "未上传文件" });
+
+  try {
+    const filename = `game-audio/user_${req.user.uid}_${Date.now()}.webm`;
+    const result = await ossClient.put(filename, req.file.buffer);
+
+    // 生成访问链接
+    let url = result.url;
+    if (process.env.ALIYUN_OSS_CUSTOM_DOMAIN) {
+      const domain = process.env.ALIYUN_OSS_CUSTOM_DOMAIN.replace(/\/$/, "");
+      url = `${domain}/${result.name}`;
+    }
+
+    res.json({ ok: true, url });
+  } catch (e) {
+    console.error("OSS Upload Error:", e);
+    res.status(500).json({ error: "上传失败: " + e.message });
+  }
+});
+
+app.post("/api/upload/report", authMiddleware, async (req, res) => {
+  if (!ossClient) return res.status(500).json({ error: "服务器未配置 OSS" });
+
+  const { html, markdown } = req.body || {};
+  if (!html && !markdown) return res.status(400).json({ error: "缺少报告内容" });
+
+  try {
+    const timestamp = Date.now();
+    const resultUrls = {};
+    const customDomain = process.env.ALIYUN_OSS_CUSTOM_DOMAIN
+      ? process.env.ALIYUN_OSS_CUSTOM_DOMAIN.replace(/\/$/, "")
+      : null;
+
+    if (html) {
+      const filename = `game-review/report_${req.user.uid}_${timestamp}.html`;
+      const r = await ossClient.put(filename, Buffer.from(html));
+      resultUrls.htmlUrl = customDomain ? `${customDomain}/${r.name}` : r.url;
+    }
+
+    if (markdown) {
+      const filename = `game-review/report_${req.user.uid}_${timestamp}.md`;
+      const r = await ossClient.put(filename, Buffer.from(markdown));
+      resultUrls.markdownUrl = customDomain ? `${customDomain}/${r.name}` : r.url;
+    }
+
+    res.json({ ok: true, ...resultUrls });
+  } catch (e) {
+    console.error("OSS Upload Error:", e);
+    res.status(500).json({ error: "上传失败: " + e.message });
+  }
+});
+
+
+
+// ======== API: OSS Management (Admin) ========
+app.get("/api/admin/oss/files", authMiddleware, async (req, res) => {
+  if (!ossClient) return res.status(500).json({ error: "服务器未配置 OSS" });
+
+  try {
+    const { prefix, marker, maxKeys, delimiter } = req.query;
+    const query = {
+      prefix: prefix || null,
+      marker: marker || null,
+      'max-keys': maxKeys ? Number(maxKeys) : 20,
+      delimiter: delimiter || "/" // Default to directory mode
+    };
+
+    // ossClient.list returns { objects: [], prefixes: [], nextMarker: string, res: ... }
+    const result = await ossClient.list(query);
+
+    const customDomain = process.env.ALIYUN_OSS_CUSTOM_DOMAIN
+      ? process.env.ALIYUN_OSS_CUSTOM_DOMAIN.replace(/\/$/, "")
+      : null;
+
+    const files = (result.objects || []).map(obj => ({
+      name: obj.name,
+      url: customDomain ? `${customDomain}/${obj.name}` : obj.url,
+      size: obj.size,
+      lastModified: obj.lastModified
+    }));
+
+    // Prefixes are subdirectories
+    const folders = result.prefixes || [];
+
+    res.json({
+      ok: true,
+      files,
+      folders,
+      nextMarker: result.nextMarker,
+      isTruncated: result.isTruncated
+    });
+  } catch (e) {
+    console.error("OSS List Error:", e);
+    res.status(500).json({ error: "获取文件列表失败: " + e.message });
+  }
+});
+
+app.delete("/api/admin/oss/files", authMiddleware, async (req, res) => {
+  if (!ossClient) return res.status(500).json({ error: "服务器未配置 OSS" });
+
+  const { filename } = req.body; // Expect JSON body: { "filename": "path/to/file" }
+  if (!filename) return res.status(400).json({ error: "未指定文件名" });
+
+  try {
+    // ossClient.delete returns result object
+    const result = await ossClient.delete(filename);
+    console.log(`🗑️ Deleted OSS file: ${filename}`, result.res.status);
+
+    res.json({ ok: true, filename });
+  } catch (e) {
+    console.error("OSS Delete Error:", e);
+    res.status(500).json({ error: "删除文件失败: " + e.message });
   }
 });
 

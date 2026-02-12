@@ -1,0 +1,40 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "🚀 Deploy to Staging (Test)",
+            "type": "shell",
+            "command": "bash",
+            "windows": {
+                "command": "C:\\Program Files\\Git\\bin\\bash.exe"
+            },
+            "args": [
+                "scripts/deploy_staging.sh"
+            ],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "♻️ Sync Staging to Production",
+            "type": "shell",
+            "command": "bash",
+            "windows": {
+                "command": "C:\\Program Files\\Git\\bin\\bash.exe"
+            },
+            "args": [
+                "scripts/sync_prod.sh"
+            ],
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        }
+    ]
+}

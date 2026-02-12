@@ -88,4 +88,62 @@ def execute_update(query, params=()):
             return rows_affected, None
         except Exception as e:
             return 0, str(e)
-    return 0, "Connection failed"
+
+def init_db():
+    """Initialize database tables if they don't exist"""
+    conn = get_connection(read_only=False)
+    if conn:
+        try:
+            cursor = conn.cursor()
+            # Create system_settings table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT,
+                    description TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"Error initializing DB: {e}")
+
+# Run init on import (or call explicitly)
+init_db()
+
+def get_system_setting(key, default=None):
+    df = run_query("SELECT value FROM system_settings WHERE key = ?", (key,))
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        return df.iloc[0]['value']
+    return default
+
+def set_system_setting(key, value, description=None):
+    # UPSERT logic (SQLite 3.24+)
+    conn = get_connection(read_only=False)
+    if conn:
+        try:
+            cursor = conn.cursor()
+            if description:
+                cursor.execute("""
+                    INSERT INTO system_settings (key, value, description, updated_at) 
+                    VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(key) DO UPDATE SET 
+                        value=excluded.value, 
+                        description=excluded.description,
+                        updated_at=excluded.updated_at
+                """, (key, str(value), description))
+            else:
+                cursor.execute("""
+                    INSERT INTO system_settings (key, value, updated_at) 
+                    VALUES (?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(key) DO UPDATE SET 
+                        value=excluded.value, 
+                        updated_at=excluded.updated_at
+                """, (key, str(value)))
+            conn.commit()
+            conn.close()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+    return False, "Connection failed"

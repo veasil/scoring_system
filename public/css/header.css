@@ -1,0 +1,301 @@
+/* ========================================
+   页面头部样式 - Header
+   ======================================== */
+
+.game-header {
+    background: rgba(102, 126, 234, 0.3);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    color: var(--text-white);
+    padding: var(--space-sm) var(--space-lg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: var(--shadow-md);
+}
+
+.game-header h1 {
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-black);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    letter-spacing: -0.01em;
+}
+
+/* 控制按钮组 */
+.game-controls {
+    display: flex;
+    gap: var(--space-lg);
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+/* 模式选择器 */
+.mode-selector {
+    display: flex;
+    gap: var(--space-xs);
+}
+
+.mode-btn {
+    padding: var(--space-xs) var(--space-md);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(var(--glass-blur-light));
+    -webkit-backdrop-filter: blur(var(--glass-blur-light));
+    color: var(--text-white);
+    border-radius: var(--radius-pill);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.mode-btn i,
+.action-btn i,
+.auth-btn i,
+.timer-btn i,
+.view-event-btn i {
+    width: 17px;
+    height: 17px;
+    vertical-align: middle;
+    margin-top: -1px;
+    /* 微调以实现视觉居中 */
+}
+
+.mode-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.mode-btn:active {
+    transform: translateY(0);
+}
+
+.mode-btn.active {
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--color-primary-start);
+    border-color: rgba(255, 255, 255, 0.8);
+    box-shadow:
+        0 4px 16px rgba(255, 255, 255, 0.3),
+        inset 0 -2px 4px rgba(102, 126, 234, 0.1);
+}
+
+/* 计时器显示 */
+.timer-display {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-xs);
+    align-items: flex-end;
+}
+
+.timer-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+    font-size: var(--font-size-sm);
+}
+
+.timer-controls label {
+    color: var(--text-white-secondary);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    font-weight: var(--font-weight-medium);
+}
+
+.timer-controls input {
+    width: 80px;
+    padding: 0.3rem var(--space-xs);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(var(--glass-blur-light));
+    -webkit-backdrop-filter: blur(var(--glass-blur-light));
+    color: var(--text-white);
+    font-size: var(--font-size-sm);
+    text-align: center;
+    transition: all var(--transition-fast);
+}
+
+.timer-controls input:focus {
+    outline: none;
+    border-color: rgba(255, 255, 255, 0.6);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.timer-btn {
+    padding: 0.3rem var(--space-sm);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.25);
+    backdrop-filter: blur(var(--glass-blur-light));
+    -webkit-backdrop-filter: blur(var(--glass-blur-light));
+    color: var(--text-white);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: var(--font-size-xs);
+    font-weight: var(--font-weight-medium);
+    transition: all var(--transition-base);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.timer-btn:hover {
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.5);
+    transform: translateY(-1px);
+}
+
+.timer-info {
+    font-size: var(--font-size-xl);
+    font-weight: var(--font-weight-bold);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 认证控制区域 */
+.auth-controls {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+.auth-btn {
+    padding: var(--space-xs) var(--space-sm);
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    background: rgba(255, 255, 255, 0.95);
+    color: var(--color-primary-start);
+    cursor: pointer;
+    font-weight: var(--font-weight-medium);
+    transition: all var(--transition-base);
+}
+
+.auth-btn:hover {
+    background: #fff;
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+}
+
+.auth-btn.secondary {
+    background: rgba(0, 0, 0, 0.1);
+    color: var(--text-white);
+}
+
+.user-badge {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+}
+
+/* ========================================
+   底部样式 - Footer
+   ======================================== */
+
+.game-footer {
+    background: var(--glass-bg-light);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    padding: var(--space-sm) var(--space-lg);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.game-status {
+    display: flex;
+    gap: var(--space-24);
+    /* 增加间距 */
+    flex-wrap: wrap;
+}
+
+.game-status span {
+    font-weight: var(--font-weight-semibold);
+    color: var(--text-white);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    font-size: var(--font-size-sm);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.game-status span i {
+    width: 18px;
+    height: 18px;
+}
+
+.game-actions {
+    display: flex;
+    gap: var(--space-sm);
+}
+
+.action-btn {
+    padding: var(--space-xs) var(--space-md);
+    border: 1px solid rgba(102, 126, 234, 0.6);
+    background: rgba(102, 126, 234, 0.25);
+    backdrop-filter: blur(var(--glass-blur-light));
+    -webkit-backdrop-filter: blur(var(--glass-blur-light));
+    color: var(--text-white);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    font-weight: var(--font-weight-semibold);
+    font-size: var(--font-size-sm);
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: var(--shadow-sm);
+}
+
+.action-btn:hover {
+    background: rgba(102, 126, 234, 0.6);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+}
+
+.action-btn:active {
+    transform: translateY(0);
+}
+
+/* ========================================
+   响应式适配
+   ======================================== */
+
+@media (max-width: 768px) {
+    .game-header {
+        flex-direction: column;
+        gap: var(--space-sm);
+        text-align: center;
+        padding: var(--space-md);
+    }
+
+    .game-header h1 {
+        font-size: var(--font-size-xl);
+    }
+
+    .game-controls {
+        justify-content: center;
+        width: 100%;
+    }
+
+    .auth-controls {
+        margin-left: 0;
+    }
+
+    .game-footer {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .game-status {
+        justify-content: center;
+        gap: var(--space-md);
+    }
+}

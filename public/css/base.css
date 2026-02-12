@@ -1,0 +1,270 @@
+/* ========================================
+   设计系统基础 - Design System Base
+   ======================================== */
+
+/* Google Fonts */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap');
+
+/* ========================================
+   CSS 自定义属性 - Design Tokens
+   ======================================== */
+:root {
+    /* 色彩系统 - Color System */
+    --color-primary-start: #667eea;
+    --color-primary-end: #764ba2;
+    --color-primary-light: rgba(102, 126, 234, 0.15);
+    --color-primary-medium: rgba(102, 126, 234, 0.4);
+    --color-primary-dark: rgba(102, 126, 234, 0.8);
+
+    --color-success: #28a745;
+    --color-success-light: rgba(40, 167, 69, 0.15);
+    --color-danger: #dc3545;
+    --color-danger-light: rgba(220, 53, 69, 0.15);
+    --color-warning: #ffc107;
+
+    /* 玻璃态效果 - Glassmorphism */
+    --glass-bg-light: rgba(255, 255, 255, 0.15);
+    --glass-bg-medium: rgba(255, 255, 255, 0.25);
+    --glass-bg-heavy: rgba(255, 255, 255, 0.4);
+    --glass-border: rgba(255, 255, 255, 0.3);
+    --glass-blur: 20px;
+    --glass-blur-light: 10px;
+
+    /* 文字颜色 */
+    --text-white: rgba(255, 255, 255, 0.95);
+    --text-white-secondary: rgba(255, 255, 255, 0.75);
+    --text-dark: #333;
+    --text-gray: #666;
+
+    /* 间距系统 - Spacing (8px grid) */
+    --space-4: 0.25rem;
+    /* 4px */
+    --space-8: 0.5rem;
+    /* 8px */
+    --space-12: 0.75rem;
+    /* 12px */
+    --space-16: 1rem;
+    /* 16px */
+    --space-24: 1.5rem;
+    /* 24px */
+    --space-32: 2rem;
+    /* 32px */
+    --space-40: 2.5rem;
+    /* 40px */
+    --space-48: 3rem;
+    /* 48px */
+    --space-64: 4rem;
+    /* 64px */
+
+    /* 语义化映射 */
+    --space-xs: var(--space-8);
+    --space-sm: var(--space-16);
+    --space-md: var(--space-24);
+    --space-lg: var(--space-32);
+    --space-xl: var(--space-48);
+    --space-2xl: var(--space-64);
+
+    /* 圆角系统 - Border Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
+    --radius-pill: 999px;
+
+    /* 阴影系统 - Shadows */
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.12);
+    --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.16);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.2);
+    --shadow-2xl: 0 25px 80px rgba(0, 0, 0, 0.3);
+
+    /* 字体系统 - Typography */
+    --font-family-base: 'Inter', 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-size-xs: 0.75rem;
+    /* 12px */
+    --font-size-sm: 0.875rem;
+    /* 14px */
+    --font-size-base: 1rem;
+    /* 16px */
+    --font-size-lg: 1.125rem;
+    /* 18px */
+    --font-size-xl: 1.25rem;
+    /* 20px */
+    --font-size-2xl: 1.5rem;
+    /* 24px */
+    --font-size-3xl: 2rem;
+    /* 32px */
+
+    --font-weight-normal: 400;
+    --font-weight-medium: 500;
+    --font-weight-semibold: 600;
+    --font-weight-bold: 700;
+    --font-weight-black: 900;
+
+    /* 过渡动画 - Transitions */
+    --transition-fast: 0.15s ease;
+    --transition-base: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+
+    /* 层级系统 - Z-index */
+    --z-modal-backdrop: 1000;
+    --z-modal: 1001;
+    --z-landing: 9999;
+    --z-recorder: 999;
+}
+
+/* ========================================
+   基础样式重置 - CSS Reset
+   ======================================== */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+    font-family: var(--font-family-base);
+    background-color: #f5f5f5;
+    color: var(--text-dark);
+    line-height: 1.6;
+    overflow-x: hidden;
+}
+
+/* ========================================
+   通用工具类 - Utility Classes
+   ======================================== */
+.hidden {
+    display: none !important;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+/* 文字阴影 */
+.text-shadow {
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 玻璃态容器 */
+.glass-container {
+    background: var(--glass-bg-light);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+/* 渐变背景 */
+.gradient-primary {
+    background: linear-gradient(135deg, var(--color-primary-start) 0%, var(--color-primary-end) 100%);
+}
+
+/* 高级按钮效果 */
+.btn-premium {
+    position: relative;
+    overflow: hidden;
+    transition: all var(--transition-base);
+    z-index: 1;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: var(--font-weight-semibold);
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+.btn-premium::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(120deg,
+            transparent,
+            rgba(255, 255, 255, 0.3),
+            transparent);
+    transition: all 0.6s;
+    z-index: -1;
+}
+
+.btn-premium:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-premium:hover::before {
+    left: 100%;
+}
+
+.btn-premium:active {
+    transform: translateY(0) scale(0.98);
+}
+
+/* ========================================
+   主容器布局 - Main Layout
+   ======================================== */
+#app {
+    max-width: 1200px;
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+}
+
+/* ========================================
+   响应式断点 - Responsive Breakpoints
+   ======================================== */
+@media (max-width: 1024px) {
+    :root {
+        --font-size-3xl: 1.75rem;
+        --font-size-2xl: 1.375rem;
+    }
+}
+
+@media (max-width: 768px) {
+    html {
+        font-size: 14px;
+    }
+
+    :root {
+        --space-lg: 1.5rem;
+        --space-xl: 2rem;
+        --space-2xl: 2.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    html {
+        font-size: 13px;
+    }
+}
+
+/* ========================================
+   全局禁用状态样式
+   ======================================== */
+button[disabled],
+input[disabled] {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}

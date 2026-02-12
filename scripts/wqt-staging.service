@@ -1,0 +1,14 @@
+[Unit]
+Description=WQT Auth Backend (Staging)
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/home/admin/app/wqt-staging
+ExecStart=/usr/bin/npm run start
+Restart=always
+Environment=PORT=3001
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

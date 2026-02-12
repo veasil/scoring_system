@@ -5,3 +5,12 @@ build
 wqt.db
 app.db
 app.sqlite
+*.log
+__pycache__/
+.env.staging
+.env.production
+venv/
+.streamlit/
+data/
+*.db-shm
+*.db-wal

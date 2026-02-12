@@ -1,0 +1,304 @@
+/* ========================================
+   登录页面样式 - Landing Auth Page
+   ======================================== */
+
+/* 全屏遮罩层 */
+.landing-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, var(--color-primary-start) 0%, var(--color-primary-end) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: var(--z-landing);
+    animation: landingFadeIn 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 动态背景粒子 */
+.landing-bg-particles {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image:
+        radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(255, 255, 255, 0.06) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.04) 0%, transparent 60%);
+    animation: particlesFloat 20s ease-in-out infinite;
+}
+
+/* 登录卡片容器 */
+.landing-card {
+    position: relative;
+    background: var(--glass-bg-light);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius-xl);
+    padding: var(--space-2xl) var(--space-xl);
+    max-width: 440px;
+    width: 90%;
+    box-shadow: var(--shadow-2xl);
+    animation: landingCardSlide 0.8s cubic-bezier(0.4, 0, 0.2, 1) 0.2s backwards;
+    text-align: center;
+}
+
+/* Logo 图标 */
+.landing-logo {
+    font-size: 4rem;
+    margin-bottom: var(--space-md);
+    animation: logoFloat 3s ease-in-out infinite;
+    filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
+}
+
+/* 标题 */
+.landing-title {
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-black);
+    color: var(--text-white);
+    margin-bottom: var(--space-sm);
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    letter-spacing: -0.02em;
+}
+
+/* 副标题 */
+.landing-subtitle {
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-medium);
+    color: var(--text-white-secondary);
+    margin-bottom: var(--space-xl);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* 登录表单 */
+.landing-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    margin-bottom: var(--space-lg);
+}
+
+.landing-form input {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: rgba(255, 255, 255, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.4);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-base);
+    font-family: var(--font-family-base);
+    color: var(--text-white);
+    transition: all var(--transition-base);
+    backdrop-filter: blur(var(--glass-blur-light));
+    -webkit-backdrop-filter: blur(var(--glass-blur-light));
+}
+
+.landing-form input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.landing-form input:focus {
+    outline: none;
+    background: rgba(255, 255, 255, 0.35);
+    border-color: rgba(255, 255, 255, 0.7);
+    box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.15),
+        0 4px 20px rgba(0, 0, 0, 0.2);
+    transform: translateY(-1px);
+}
+
+/* 提交按钮 */
+.landing-submit {
+    width: 100%;
+    padding: var(--space-sm) var(--space-md);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.85) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-lg);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-primary-start);
+    cursor: pointer;
+    transition: all var(--transition-base);
+    box-shadow:
+        0 4px 16px rgba(0, 0, 0, 0.2),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.08);
+    position: relative;
+    overflow: hidden;
+}
+
+.landing-submit::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    transition: left var(--transition-slow);
+}
+
+.landing-submit:hover {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0.95) 100%);
+    transform: translateY(-2px);
+    box-shadow:
+        0 6px 24px rgba(0, 0, 0, 0.25),
+        inset 0 -2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.landing-submit:hover::before {
+    left: 100%;
+}
+
+.landing-submit:active {
+    transform: translateY(0);
+    box-shadow:
+        0 2px 8px rgba(0, 0, 0, 0.2),
+        inset 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* 页脚链接 */
+.landing-footer {
+    margin-top: var(--space-md);
+    padding-top: var(--space-md);
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.landing-footer a {
+    color: var(--text-white-secondary);
+    text-decoration: none;
+    font-size: var(--font-size-sm);
+    transition: color var(--transition-fast);
+    font-weight: var(--font-weight-medium);
+}
+
+.landing-footer a:hover {
+    color: var(--text-white);
+    text-decoration: underline;
+}
+
+/* 加载状态 */
+.landing-submit.loading {
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.landing-submit.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 3px solid var(--color-primary-start);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: buttonSpin 0.8s linear infinite;
+}
+
+/* ========================================
+   响应式适配
+   ======================================== */
+@media (max-width: 768px) {
+    .landing-card {
+        padding: var(--space-xl) var(--space-lg);
+        max-width: 95%;
+    }
+
+    .landing-logo {
+        font-size: 3rem;
+    }
+
+    .landing-title {
+        font-size: var(--font-size-2xl);
+    }
+
+    .landing-subtitle {
+        font-size: var(--font-size-base);
+    }
+}
+
+@media (max-width: 480px) {
+    .landing-card {
+        padding: var(--space-lg) var(--space-md);
+    }
+
+    .landing-form input,
+    .landing-submit {
+        font-size: var(--font-size-sm);
+    }
+}
+
+/* ========================================
+   动画定义
+   ======================================== */
+@keyframes landingFadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes landingCardSlide {
+    from {
+        opacity: 0;
+        transform: translateY(40px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes logoFloat {
+
+    0%,
+    100% {
+        transform: translateY(0);
+    }
+
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+@keyframes particlesFloat {
+
+    0%,
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+        transform: translate(30px, -30px) scale(1.05);
+    }
+
+    66% {
+        transform: translate(-20px, 20px) scale(0.95);
+    }
+}
+
+@keyframes buttonSpin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* 淡出动画（登录成功后） */
+@keyframes landingFadeOut {
+    from {
+        opacity: 1;
+    }
+
+    to {
+        opacity: 0;
+        transform: scale(1.05);
+    }
+}

@@ -69,6 +69,54 @@ export async function initDb() {
       FOREIGN KEY(session_id) REFERENCES game_sessions(id)
     );
   `);
+
+  // system_settings 表 (用于存配置)
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS system_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT,
+      description TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // 预设默认配置 (Seed)
+  const defaults = [
+    ["DEV_KEY", "sj0127wqt", "开发者登录密钥"],
+    ["DEFAULT_GAME_TIME", "5000", "游戏默认倒计时时长（秒）"],
+    ["GAME_MODES", JSON.stringify([
+      { id: 'standard', name: '标准版', desc: '体验 15 张卡牌', time: 5000, detail: '启蒙5 / 成长5 / 青春5', targetCards: 15, distribution: { '启蒙期': 5, '成长期': 5, '青春期': 5 } },
+      { id: 'essence', name: '精华版', desc: '体验 9 张卡牌', time: 3600, detail: '启蒙3 / 成长3 / 青春3', targetCards: 9, distribution: { '启蒙期': 3, '成长期': 3, '青春期': 3 } }
+    ]), "游戏模式定义（JSON格式）"],
+    ["ATTRIBUTES_CONFIG", JSON.stringify({
+      initial: 3,
+      min: 0,
+      max: 10,
+      failureThreshold: 0
+    }), "伍力值评分规则配置"],
+    ["BRANDING_INFO", JSON.stringify({
+      title: "《AI在5000天·伍力全开》伍力值计分系统",
+      copyright: "© 2026 上海伍仟天数字科技有限公司 | 保留所有权利",
+      welcome_title: "欢迎来到AI 5000天<br>伍力全开的世界！"
+    }), "站点品牌与文本信息"]
+  ];
+  for (const [key, val, desc] of defaults) {
+    const exists = await dbGet("SELECT 1 FROM system_settings WHERE key = ?", [key]);
+    if (!exists) {
+      await dbRun("INSERT INTO system_settings (key, value, description) VALUES (?, ?, ?)", [key, val, desc]);
+    }
+  }
+
+  console.log('✅ Main database initialized');
+}
+
+export async function getSystemSetting(key, defaultValue = null) {
+  const row = await dbGet("SELECT value FROM system_settings WHERE key = ?", [key]);
+  return row ? row.value : defaultValue;
+}
+
+export async function getAllSettings() {
+  return await dbAll("SELECT key, value, description FROM system_settings");
 }
 
 export function dbRun(sql, params = []) {

@@ -1,0 +1,13 @@
+[Unit]
+Description=WQT Admin Panel (Staging)
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/home/admin/app/wqt-staging/admin-panel
+ExecStart=/home/admin/app/wqt-staging/venv/bin/streamlit run app.py --server.port 8502 --server.address 0.0.0.0
+Restart=always
+Environment=PORT=8502
+
+[Install]
+WantedBy=multi-user.target

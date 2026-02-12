@@ -338,10 +338,21 @@
     target.innerHTML = `<div style="padding: 12px 0; line-height: 1.6;">${escapeHtml(text)}</div>`;
   }
 
+  async function uploadReport(html, markdown) {
+    return api("/api/upload/report", {
+      method: "POST",
+      body: { html, markdown }
+    });
+  }
+
   function renderResult(target, { markdown, reportUrl, extractMd }) {
     if (!target) return;
     const preview = escapeHtml(markdown);
     const extractPreview = extractMd ? escapeHtml(extractMd) : "";
+
+    // 如果 reportUrl 是 http 开头，说明是 OSS 链接，否则可能是 blob
+    const isRemote = reportUrl && reportUrl.startsWith("http");
+
     target.innerHTML = `
       <div style="max-height: 460px; overflow-y: auto; line-height: 1.7;">
         <h4>复盘报告已生成</h4>
@@ -354,26 +365,20 @@
         : ""
       }
         <div style="display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap;">
-          <button id="review-open-report" style="padding: 10px 16px; background: #2b6cb0; color: #fff; border: none; border-radius: 6px; cursor: pointer;">打开复盘报告</button>
-          <button id="review-download-report" style="padding: 10px 16px; background: #2f855a; color: #fff; border: none; border-radius: 6px; cursor: pointer;">下载 HTML</button>
+          <button id="review-open-report" style="padding: 10px 16px; background: #2b6cb0; color: #fff; border: none; border-radius: 6px; cursor: pointer;">
+            ${isRemote ? "在浏览器中查看报告" : "打开复盘报告"}
+          </button>
+          
           <button id="review-download-md" style="padding: 10px 16px; background: #4a5568; color: #fff; border: none; border-radius: 6px; cursor: pointer;">下载 Markdown</button>
         </div>
       </div>
     `;
 
     const openBtn = document.getElementById("review-open-report");
-    const downloadBtn = document.getElementById("review-download-report");
     const downloadMdBtn = document.getElementById("review-download-md");
 
     if (openBtn) openBtn.onclick = () => window.open(reportUrl, "_blank");
-    if (downloadBtn) {
-      downloadBtn.onclick = () => {
-        const a = document.createElement("a");
-        a.href = reportUrl;
-        a.download = `game_review_${new Date().toISOString().slice(0, 10)}.html`;
-        a.click();
-      };
-    }
+
     if (downloadMdBtn) {
       downloadMdBtn.onclick = () => {
         const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
@@ -475,8 +480,23 @@
 
       const markdown = [part1.trim(), "", part2.trim()].join("\n\n").trim();
       const reportHtml = buildReportHtml(markdown, reviewData);
-      const reportBlob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
-      const reportUrl = URL.createObjectURL(reportBlob);
+
+      // 上传到 OSS
+      renderStatus(target, "正在上传复盘报告...");
+      let reportUrl = "";
+      try {
+        const uploadRes = await uploadReport(reportHtml, markdown);
+        if (uploadRes && uploadRes.ok) {
+          reportUrl = uploadRes.htmlUrl;
+          console.log("报告上传成功:", uploadRes);
+        } else {
+          throw new Error("上传失败");
+        }
+      } catch (e) {
+        console.error("报告上传出错，回退到本地Blob:", e);
+        const reportBlob = new Blob([reportHtml], { type: "text/html;charset=utf-8" });
+        reportUrl = URL.createObjectURL(reportBlob);
+      }
 
       renderResult(target, { markdown, reportUrl, extractMd });
     } catch (error) {

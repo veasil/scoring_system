@@ -1,0 +1,17 @@
+{
+    "mcpServers": {
+        "wqt-staging": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@zibdie/ssh-mcp-server"
+            ],
+            "env": {
+                "SSH_HOST": "8.210.121.92",
+                "SSH_USER": "root",
+                "SSH_PORT": "22",
+                "SSH_KEY_PATH": "C:\\Users\\BibbTwigs\\.ssh\\id_rsa_antigravity"
+            }
+        }
+    }
+}

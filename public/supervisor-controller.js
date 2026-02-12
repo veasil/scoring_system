@@ -4,7 +4,7 @@ class SupervisorController {
         this.globalState = globalState;
         this.radarChart = null;
         this.isInitialized = false;
-        
+
         // 绑定状态监听
         this.globalState.addListener((type, newValue, oldValue, state) => {
             this.handleStateChange(type, newValue, oldValue, state);
@@ -14,12 +14,12 @@ class SupervisorController {
     // 初始化监督模式界面
     initialize() {
         if (this.isInitialized) return;
-        
+
         this.createSupervisorInterface();
         this.initializeRadarChart();
         this.bindEvents();
         this.updateDisplay();
-        
+
         this.isInitialized = true;
         console.log('监督模式已初始化');
     }
@@ -183,11 +183,11 @@ class SupervisorController {
     // 更新属性显示
     updateAttributesDisplay() {
         const attributes = this.globalState.getAttributes();
-        
+
         Object.entries(attributes).forEach(([attr, value]) => {
             const input = document.querySelector(`.attr-input[data-attr="${attr}"]`);
             const valueDisplay = input?.parentElement.nextElementSibling;
-            
+
             if (input) input.value = value;
             if (valueDisplay) valueDisplay.textContent = value;
         });
@@ -234,18 +234,18 @@ class SupervisorController {
             let changes = '无变化';
             let content = '';
             let eventType = '';
-            
+
             if (entry.isSkillUse) {
                 // 技能使用记录
                 eventType = '技能使用';
                 content = `使用${entry.skillType}技能`;
-                
+
                 if (entry.skillEffect && Object.keys(entry.skillEffect).length > 0) {
                     changes = Object.entries(entry.skillEffect)
                         .map(([attr, value]) => `${attr}${value > 0 ? '+' : ''}${value}`)
                         .join(', ');
                 }
-                
+
                 // 特殊处理创心力和安全力
                 if (entry.skillType === '创心力' && entry.optionData?.text?.includes('选项D')) {
                     content += ' (创建选项D)';
@@ -256,11 +256,11 @@ class SupervisorController {
                 // 卡牌选择记录
                 eventType = '卡牌选择';
                 content = `卡牌${entry.cardId} - 选项${entry.selectedOption}`;
-                
+
                 if (entry.selectedOption === 'D' && entry.isCreativeOption) {
                     content += ' (创心力选项)';
                 }
-                
+
                 // 计算属性变化
                 if (entry.attributesBefore && entry.attributesAfter) {
                     const changeEntries = [];
@@ -281,7 +281,7 @@ class SupervisorController {
                         .join(', ') || '无变化';
                 }
             }
-            
+
             return `
                 <div class="history-item ${entry.isSkillUse ? 'skill-use' : 'card-choice'}">
                     <div class="history-time">${new Date(entry.timestamp).toLocaleTimeString()}</div>
@@ -300,11 +300,11 @@ class SupervisorController {
     updateGameInfo() {
         const phaseElement = document.getElementById('supervisor-current-phase');
         const completedElement = document.getElementById('supervisor-cards-completed');
-        
+
         if (phaseElement) phaseElement.textContent = this.globalState.state.currentPhase;
         if (completedElement) completedElement.textContent = this.globalState.state.cardsCompleted;
     }
-    
+
     // 更新所有显示
     updateDisplay() {
         this.updateAttributesDisplay();
@@ -325,7 +325,7 @@ class SupervisorController {
 
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
-        
+
         const a = document.createElement('a');
         a.href = url;
         a.download = `supervisor-data-${new Date().toISOString().split('T')[0]}.json`;
@@ -344,7 +344,7 @@ class RadarChart {
         this.data = data;
         this.center = { x: canvas.width / 2, y: canvas.height / 2 };
         this.radius = Math.min(canvas.width, canvas.height) / 2 - 40;
-        
+
         this.draw();
     }
 
@@ -355,20 +355,20 @@ class RadarChart {
 
     draw() {
         this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        
+
         const attributes = Object.keys(this.data);
         const values = Object.values(this.data);
         const angleStep = (2 * Math.PI) / attributes.length;
 
         // 绘制网格
         this.drawGrid(attributes, angleStep);
-        
+
         // 绘制数据
         this.drawData(values, angleStep);
-        
+
         // 绘制标签
         this.drawLabels(attributes, angleStep);
-        
+
         // 绘制总分值
         this.drawTotalScore(values);
     }
@@ -389,7 +389,7 @@ class RadarChart {
             const angle = i * angleStep - Math.PI / 2;
             const x = this.center.x + Math.cos(angle) * this.radius;
             const y = this.center.y + Math.sin(angle) * this.radius;
-            
+
             this.ctx.beginPath();
             this.ctx.moveTo(this.center.x, this.center.y);
             this.ctx.lineTo(x, y);
@@ -408,7 +408,7 @@ class RadarChart {
             const value = values[i] / 10; // 归一化到0-1
             const x = this.center.x + Math.cos(angle) * this.radius * value;
             const y = this.center.y + Math.sin(angle) * this.radius * value;
-            
+
             if (i === 0) {
                 this.ctx.moveTo(x, y);
             } else {
@@ -426,7 +426,7 @@ class RadarChart {
             const value = values[i] / 10;
             const x = this.center.x + Math.cos(angle) * this.radius * value;
             const y = this.center.y + Math.sin(angle) * this.radius * value;
-            
+
             this.ctx.beginPath();
             this.ctx.arc(x, y, 4, 0, 2 * Math.PI);
             this.ctx.fill();
@@ -443,7 +443,7 @@ class RadarChart {
             const angle = i * angleStep - Math.PI / 2;
             const x = this.center.x + Math.cos(angle) * (this.radius + 20);
             const y = this.center.y + Math.sin(angle) * (this.radius + 20);
-            
+
             this.ctx.fillText(attributes[i], x, y);
         }
     }
@@ -452,19 +452,19 @@ class RadarChart {
         // 计算总分
         const totalScore = values.reduce((sum, value) => sum + value, 0);
         const maxScore = values.length * 10; // 最大可能分数
-        
+
         // 绘制总分数字
         this.ctx.fillStyle = '#667eea';
         this.ctx.font = 'bold 20px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
         this.ctx.fillText(totalScore.toString(), this.center.x, this.center.y - 8);
-        
+
         // 绘制"总分"标签
         this.ctx.fillStyle = '#666';
         this.ctx.font = '12px Arial';
         this.ctx.fillText('总分', this.center.x, this.center.y + 8);
-        
+
         // 绘制分数比例
         this.ctx.fillStyle = '#999';
         this.ctx.font = '10px Arial';
