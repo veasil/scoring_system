@@ -1416,7 +1416,13 @@ def oss_management_page():
                     c1.markdown(f"[{display_name}]({f['url']})")
                     c2.write(f"{f['size']/1024:.1f} KB")
                     # Format time a bit if possible, or raw
-                    c3.write(f['lastModified'].replace('T', ' ')[:19])
+                    try:
+                        # OSS 返回的是 ISO 格式的 UTC 时间 (如 2023-01-01T12:00:00.000Z)
+                        dt_utc = datetime.datetime.fromisoformat(f['lastModified'].replace('Z', '+00:00'))
+                        dt_beijing = dt_utc.astimezone(BEIJING_TZ)
+                        c3.write(dt_beijing.strftime("%Y-%m-%d %H:%M:%S"))
+                    except:
+                        c3.write(f['lastModified'].replace('T', ' ')[:19])
                     
                     if c4.button("🗑️", key=f"pre_del_{f['name']}", help="申请删除"):
                         st.session_state.oss_delete_target = f['name']
