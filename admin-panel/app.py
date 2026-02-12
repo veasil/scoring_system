@@ -774,10 +774,22 @@ def user_management_page():
     
     # --- 用户列表 ---
     st.subheader("📋 用户列表")
-    display_df = df[['id', 'username', 'phone', 'guardian_name', 'role', 'total_games', 'avg_score', 'modes_played']].copy()
-    display_df['avg_score'] = display_df['avg_score'].apply(lambda x: f"{x:.0f}" if x else "--")
-    display_df.columns = ['ID', '昵称', '手机号', '守望师', '角色', '场次数', '平均分', '游戏模式']
-    st.dataframe(display_df, use_container_width=True, hide_index=True)
+    def get_user_display(row):
+        nick = str(row.get('username') or '').strip()
+        guard = str(row.get('guardian_name') or '').strip()
+        if nick and guard: return f"{nick} ({guard})"
+        return nick or guard or "未知"
+
+    display_df = df.copy()
+    display_df['显示身份'] = display_df.apply(get_user_display, axis=1)
+    
+    # 挑选并重命名列
+    cols_to_show = ['id', '显示身份', 'phone', 'role', 'total_games', 'avg_score', 'modes_played']
+    final_display = display_df[cols_to_show].copy()
+    final_display['avg_score'] = final_display['avg_score'].apply(lambda x: f"{x:.1f}" if x else "0.0")
+    final_display.columns = ['ID', '用户/守望者', '手机号', '角色', '场次数', '平均分', '游戏模式']
+    
+    st.dataframe(final_display, use_container_width=True, hide_index=True)
     
     st.markdown("---")
     
@@ -1726,7 +1738,7 @@ def data_audit_page():
                 
                 # 安全处理 final_score
                 score_val = row.get('final_score')
-                score_display = str(int(score_val)) if pd.notna(score_val) and score_val > 0 else '-'
+                score_display = str(int(score_val)) if pd.notna(score_val) else '-'
                 
                 with st.expander(f"🆔 {row['id']} | 👤 {user_name} | 📍 {location} | 🎴 {card_count}张 | ⏱ {duration_str} | 得分: {score_display}"):
                     cols = st.columns([3, 1])
@@ -1807,7 +1819,7 @@ def data_audit_page():
                 
                 # 安全处理各字段
                 score_val = row.get('final_score')
-                score_display = int(score_val) if pd.notna(score_val) and score_val > 0 else '-'
+                score_display = int(score_val) if pd.notna(score_val) else '-'
                 
                 card_count_val = row.get('card_count')
                 card_display = int(card_count_val) if pd.notna(card_count_val) else 0
@@ -1884,6 +1896,9 @@ else:
             
         st.divider()
         nav = st.radio("导航", ["🎛️ 驾驶舱", "👤 用户管理", "🎴 卡牌管理", "📂 OSS 文件管理", "🎮 游戏分析", "🧹 数据审计", "🔬 复盘测试", "⚙️ 系统设置"])
+        st.divider()
+        st.caption("🚀 系统版本: v1.1.3")
+        st.caption("📅 更新时间: 2026-02-13 04:20")
 
     # Router
     if "驾驶舱" in nav:
