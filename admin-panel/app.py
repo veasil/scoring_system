@@ -7,6 +7,9 @@ import requests
 import json
 import datetime
 
+# 北京时区 (UTC+8)，全局统一使用
+BEIJING_TZ = datetime.timezone(datetime.timedelta(hours=8))
+
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8080")
 
 # --- Config & Session State ---
@@ -114,7 +117,7 @@ def format_duration(ms):
 def format_ts(ts):
     if not ts: return ""
     try:
-        dt = datetime.datetime.fromtimestamp(int(ts) / 1000)
+        dt = datetime.datetime.fromtimestamp(int(ts) / 1000, tz=BEIJING_TZ)
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except:
         return ""
@@ -354,7 +357,7 @@ def build_report_html(markdown, data):
     title = "小伍的AI成长日记"
     session = data['session']
     meta = " | ".join([
-        f"复盘生成时间: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"复盘生成时间: {datetime.datetime.now(tz=BEIJING_TZ).strftime('%Y-%m-%d %H:%M:%S')}",
         f"游戏开始: {format_ts(session['startedAt']) or '未知'}",
         f"游戏结束: {format_ts(session['endedAt']) or '未知'}",
         f"总时长: {format_duration(data['durationMs']) or '未知'}",
@@ -645,7 +648,7 @@ def overview_page():
     # Pre-process
     if not sessions_df.empty:
         # timestamp is usually ms in this system based on format_ts
-        sessions_df['start_dt'] = pd.to_datetime(sessions_df['started_at'], unit='ms')
+        sessions_df['start_dt'] = pd.to_datetime(sessions_df['started_at'], unit='ms', utc=True).dt.tz_convert('Asia/Shanghai')
         sessions_df['date'] = sessions_df['start_dt'].dt.date
     
     # --- Metrics ---
@@ -653,7 +656,7 @@ def overview_page():
     total_games = len(sessions_df)
     
     # Active Today
-    today = datetime.date.today()
+    today = datetime.datetime.now(tz=BEIJING_TZ).date()
     if not sessions_df.empty:
         active_today = len(sessions_df[sessions_df['date'] == today])
         scores = sessions_df['final_score'].dropna()
@@ -908,7 +911,7 @@ def process_daily_stats(sessions_df):
     
     # Ensure started_at is datetime
     # Timestamp is likely in milliseconds based on previous code (format_ts divides by 1000)
-    sessions_df['date'] = pd.to_datetime(sessions_df['started_at'], unit='ms').dt.date
+    sessions_df['date'] = pd.to_datetime(sessions_df['started_at'], unit='ms', utc=True).dt.tz_convert('Asia/Shanghai').dt.date
     
     daily_counts = sessions_df.groupby('date').size().reset_index(name='count')
     daily_counts = daily_counts.sort_values('date')
@@ -973,9 +976,9 @@ def game_analysis_page():
         total_games = len(sessions_df)
         
         # Today's games
-        today = datetime.date.today()
+        today = datetime.datetime.now(tz=BEIJING_TZ).date()
         # Ensure date column exists for filtering
-        sessions_df['date_obj'] = pd.to_datetime(sessions_df['started_at'], unit='ms').dt.date
+        sessions_df['date_obj'] = pd.to_datetime(sessions_df['started_at'], unit='ms', utc=True).dt.tz_convert('Asia/Shanghai').dt.date
         today_games = sessions_df[sessions_df['date_obj'] == today]
         today_count = len(today_games)
         
@@ -1537,7 +1540,7 @@ def system_settings_page():
                         st.download_button(
                             label="生成并下载数据库快照 (.db)",
                             data=f,
-                            file_name=f"wqt_backup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
+                            file_name=f"wqt_backup_{datetime.datetime.now(tz=BEIJING_TZ).strftime('%Y%m%d_%H%M%S')}.db",
                             mime="application/x-sqlite3",
                             use_container_width=True
                         )
@@ -1552,7 +1555,7 @@ def system_settings_page():
         st.markdown(f"""
         - **当前版本**: `v1.1.0`
         - **构建环境**: `Agentic Automation`
-        - **服务器时区**: `{datetime.datetime.now().astimezone().tzname()}`
+        - **服务器时区**: `Asia/Shanghai (UTC+8)`
         - **系统运行状态**: 🟢 正常 (Healthy)
         """)
         st.write("---")
@@ -1715,7 +1718,11 @@ def data_audit_page():
                 card_count = row.get('card_count', 0)
                 duration_str = _fmt_duration(row.get('started_at'), row.get('ended_at'))
                 
-                with st.expander(f"🆔 {row['id']} | 👤 {user_name} | 📍 {location} | 🎴 {card_count}张 | ⏱ {duration_str} | 得分: {row['final_score']}"):
+                # 安全处理 final_score
+                score_val = row.get('final_score')
+                score_display = str(int(score_val)) if pd.notna(score_val) and score_val > 0 else '-'
+                
+                with st.expander(f"🆔 {row['id']} | 👤 {user_name} | 📍 {location} | 🎴 {card_count}张 | ⏱ {duration_str} | 得分: {score_display}"):
                     cols = st.columns([3, 1])
                     with cols[0]:
                         # Show key fields in a structured way
@@ -1723,11 +1730,11 @@ def data_audit_page():
                         with info_c1:
                             st.markdown(f"**用户:** {user_name}")
                             st.markdown(f"**地点:** {location}")
-                            st.markdown(f"**游戏模式:** {row.get('game_mode', '-')}")
+                            st.markdown(f"**游戏模式:** {row.get('game_mode') or '-'}")
                         with info_c2:
                             st.markdown(f"**卡牌数量:** {card_count} 张")
                             st.markdown(f"**游玩时长:** {duration_str}")
-                            st.markdown(f"**得分:** {row.get('final_score', '-')}")
+                            st.markdown(f"**得分:** {score_display}")
                         
                         st.markdown(f"**开始时间:** {format_ts(row.get('started_at'))}")
                         
@@ -1792,14 +1799,21 @@ def data_audit_page():
                     'trash': '🗑️ 回收站'
                 }.get(row.get('status') or 'active', row.get('status') or '🟢 有效')
                 
+                # 安全处理各字段
+                score_val = row.get('final_score')
+                score_display = int(score_val) if pd.notna(score_val) and score_val > 0 else '-'
+                
+                card_count_val = row.get('card_count')
+                card_display = int(card_count_val) if pd.notna(card_count_val) else 0
+                
                 display_rows.append({
                     'ID': row['id'],
-                    '用户': row.get('user_display', 'Unknown'),
+                    '用户': row.get('user_display') or 'Unknown',
                     '地点': row.get('location') or '-',
-                    '卡牌数': row.get('card_count', 0),
+                    '卡牌数': card_display,
                     '游玩时长': duration_str,
-                    '得分': row.get('final_score', '-'),
-                    '模式': row.get('game_mode', '-'),
+                    '得分': score_display,
+                    '模式': row.get('game_mode') or '-',
                     '状态': status_label,
                 })
             
