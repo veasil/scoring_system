@@ -7,7 +7,7 @@ import requests
 import json
 import datetime
 
-BACKEND_URL = "http://127.0.0.1:8080"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8080")
 
 # --- Config & Session State ---
 st.set_page_config(page_title="WQT 中台管理系统", layout="wide", page_icon="🏢")
