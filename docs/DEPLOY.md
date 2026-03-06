@@ -6,10 +6,10 @@
 
 我们通过创建两个独立的文件夹来隔离环境，利用不同端口和域名进行访问。
 
-| 环境 | 目录 (建议) | 端口 | 域名 (示例) | Screen 会话名 |
+| 环境 | 目录 (建议) | 端口 | 访问地址 | Screen 会话名 |
 | :--- | :--- | :--- | :--- | :--- |
-| **正式服** | `~/wqt-auth-backend` | `8080` | `game.yourdomain.com` | `wqt-prod` |
-| **测试服** | `~/wqt-auth-backend-test` | `8081` | `test.yourdomain.com` | `wqt-test` |
+| **正式服** | `~/wqt-auth-backend` | `8080` | `https://www.ai5000days.com` | `wqt-prod` |
+| **测试服** | `~/wqt-auth-backend-test` | `3001` (内部) / `8081` (Nginx) | `https://www.ai5000days.com/staging/` | `wqt-test` |
 
 ---
 
@@ -95,38 +95,29 @@ npm run dev
 
 如果您使用 Nginx，可以添加两个 `server` 块分别反向代理到 8080 和 8081。
 
-### 正式服配置 (game.yourdomain.com)
-```nginx
-server {
-    listen 80;
-    server_name game.yourdomain.com;
+### 正式服配置 (www.ai5000days.com)
+正式服已由现有的 HTTPS server 块提供，代理到 `127.0.0.1:8080`。
 
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-    }
+### 测试服配置 (路径前缀方式)
+在 `www.ai5000days.com` 的 **HTTPS server 块** (443 端口) 中添加：
+```nginx
+# 测试服 - 通过路径前缀代理
+location /staging/ {
+    proxy_pass http://127.0.0.1:3001/;  # 末尾斜杠去掉 /staging/ 前缀
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
 }
 ```
 
-### 测试服配置 (test.yourdomain.com)
-```nginx
-server {
-    listen 80;
-    server_name test.yourdomain.com;
+### 测试服直连 (可选, 保留 HTTP 8081)
+参考 `scripts/nginx_staging.conf` 中的 server 块。
 
-    # 建议加上简单的密码保护 (可选)
-    # auth_basic "Restricted Content";
-    # auth_basic_user_file /etc/nginx/.htpasswd;
-
-    location / {
-        proxy_pass http://127.0.0.1:8081; # 指向测试端口
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-    }
-}
-```
+访问地址:
+- HTTPS: `https://www.ai5000days.com/staging/`
+- HTTP: `http://8.210.121.92:8081`

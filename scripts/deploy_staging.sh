@@ -158,7 +158,8 @@ $(cd $REMOTE_DIR && git log --oneline -5 2>/dev/null || echo "无法获取 Git �
 部署结果:
 ----------------------------------------------
 ✅ 部署成功
-API URL: http://$HOST:8081
+API URL (HTTPS): https://www.ai5000days.com/staging/
+API URL (HTTP):  http://$HOST:8081
 Admin URL: http://$HOST:8502
 
 日志文件: $REMOTE_DIR/deploy_logs/$LOG_FILENAME
@@ -170,6 +171,7 @@ LOGEOF
 EOF
 
 echo "✅ Deployment to Staging Complete!"
-echo "🌍 API: http://$HOST:8081"
+echo "🌍 API (HTTPS): https://www.ai5000days.com/staging/"
+echo "🌍 API (HTTP):  http://$HOST:8081"
 echo "📊 Admin: http://$HOST:8502"
 echo "📝 部署日志: $REMOTE_DIR/deploy_logs/$LOG_FILENAME"
