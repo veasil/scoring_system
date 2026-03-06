@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>我的 — 伍力全开</title>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/auth.css">
+  <link rel="stylesheet" href="css/header.css">
+  <link rel="stylesheet" href="css/animations.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    :root {
+      --blue-dark: #1565C0;
+      --gold: #B8860B;
+      --blue-light: #42A5F5;
+      --bg: #0d1117;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --border: rgba(255, 255, 255, 0.12);
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'PingFang SC', sans-serif;
+      margin: 0;
+    }
+
+    /* 顶部 header */
+    .my-header {
+      background: linear-gradient(135deg, var(--blue-dark) 0%, var(--gold) 100%);
+      padding: 24px 20px 40px;
+      text-align: center;
+      position: relative;
+    }
+
+    .my-header .back-btn {
+      position: absolute;
+      left: 16px;
+      top: 20px;
+      background: rgba(255, 255, 255, 0.2);
+      border: none;
+      border-radius: 50%;
+      width: 36px;
+      height: 36px;
+      cursor: pointer;
+      color: white;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.25);
+      margin: 0 auto 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+    }
+
+    .guardian-name {
+      font-size: 20px;
+      font-weight: bold;
+      margin: 0;
+    }
+
+    .level-badge {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .level-initial {
+      background: rgba(33, 150, 243, 0.3);
+      color: #42A5F5;
+      border: 1px solid #42A5F5;
+    }
+
+    .level-advanced {
+      background: rgba(255, 193, 7, 0.3);
+      color: #FFD54F;
+      border: 1px solid #FFD54F;
+    }
+
+    .level-mentor {
+      background: rgba(244, 67, 54, 0.3);
+      color: #EF9A9A;
+      border: 1px solid #EF9A9A;
+    }
+
+    /* 升级申请按钮 */
+    .upgrade-btn {
+      margin-top: 12px;
+      padding: 8px 20px;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      border-radius: 20px;
+      color: white;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .upgrade-btn:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .upgrade-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Tab 导航 */
+    .tab-bar {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: rgba(0, 0, 0, 0.3);
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 14px 8px;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 13px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .tab-btn.active {
+      color: var(--blue-light);
+      border-bottom-color: var(--blue-light);
+    }
+
+    /* 内容区 */
+    .tab-content {
+      display: none;
+      padding: 20px 16px;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    /* 卡片 */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .card-meta {
+      color: var(--text-muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .card-score {
+      font-size: 22px;
+      font-weight: bold;
+      color: var(--blue-light);
+    }
+
+    /* 表单 */
+    textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      color: var(--text);
+      font-size: 14px;
+      resize: vertical;
+      min-height: 100px;
+      font-family: inherit;
+    }
+
+    .submit-btn {
+      width: 100%;
+      margin-top: 10px;
+      padding: 12px;
+      background: linear-gradient(135deg, var(--blue-dark), #1976D2);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    .submit-btn:hover {
+      opacity: 0.85;
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .type-selector {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .type-btn {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    .type-btn.active {
+      background: var(--blue-dark);
+      color: white;
+      border-color: var(--blue-dark);
+    }
+
+    /* 空状态 */
+    .empty-state {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 40px 20px;
+    }
+
+    .empty-state .icon {
+      font-size: 40px;
+      margin-bottom: 12px;
+    }
+
+    /* Toast */
+    #toast {
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #4CAF50;
+      color: white;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      display: none;
+      z-index: 999;
+    }
+
+    /* 登录提示 */
+    #login-wall {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    #login-wall h2 {
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .go-login-btn {
+      padding: 12px 32px;
+      background: var(--blue-dark);
+      border: none;
+      border-radius: 8px;
+      color: white;
+      font-size: 15px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div id="app">
+    <!-- 登录提示 -->
+    <div id="login-wall" style="display:none">
+      <div style="font-size:48px;margin-bottom:16px">👁️</div>
+      <h2>请先登录</h2>
+      <p style="color:var(--text-muted);margin-bottom:24px">登录后查看你的守望师档案</p>
+      <button class="go-login-btn" id="go-login-btn">前往登录</button>
+    </div>
+
+    <!-- 主内容 -->
+    <div id="main-content" style="display:none">
+      <!-- 头部 -->
+      <div class="my-header">
+        <button class="back-btn"
+          onclick="sessionStorage.setItem('skip_intro','true'); location.href = HOME_URL;">←</button>
+        <div class="avatar">👁️</div>
+        <p class="guardian-name" id="guardian-name">...</p>
+        <span class="level-badge level-initial" id="level-badge">🔵 初始守望者</span>
+        <br>
+        <button class="upgrade-btn" id="upgrade-btn" onclick="applyUpgrade()">申请升级</button>
+        <p id="upgrade-status" style="font-size:12px;margin-top:6px;opacity:0.8;display:none"></p>
+      </div>
+
+      <!-- Tab 导航 -->
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('activities', this)">📅 我的活动</button>
+        <button class="tab-btn" onclick="switchTab('feedback', this)">💭 感想上传</button>
+        <button class="tab-btn" onclick="switchTab('bugreport', this)">🐛 系统反馈</button>
+      </div>
+
+      <!-- 我的活动 -->
+      <div id="tab-activities" class="tab-content active">
+        <div id="activities-list">
+          <div class="empty-state">
+            <div class="icon">📅</div>
+            <p>加载中...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 感想上传 -->
+      <div id="tab-feedback" class="tab-content">
+        <div class="card">
+          <div class="card-title">分享你的收获与感想</div>
+          <p style="color:var(--text-muted);font-size:13px;margin:8px 0 16px">你的感想将提交给运营团队</p>
+          <label style="font-size:13px;color:var(--text-muted)">关联活动（可选）</label>
+          <select id="feedback-activity"
+            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);margin:6px 0 12px;font-size:14px">
+            <option value="">不关联活动</option>
+          </select>
+          <textarea id="feedback-content" placeholder="写下你的感想与收获..."></textarea>
+          <button class="submit-btn" id="feedback-btn" onclick="submitFeedback('reflection')">提交感想</button>
+        </div>
+      </div>
+
+      <!-- 系统反馈 -->
+      <div id="tab-bugreport" class="tab-content">
+        <div class="card">
+          <div class="card-title">反馈问题或建议</div>
+          <p style="color:var(--text-muted);font-size:13px;margin:8px 0 16px">帮助我们改进系统</p>
+          <textarea id="bug-content" placeholder="描述你遇到的问题或建议..."></textarea>
+          <button class="submit-btn" id="bug-btn" onclick="submitFeedback('bug')">提交反馈</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script>
+    const API_BASE = localStorage.getItem('wqt_api_base') || '/api';
+    const HOME_URL = localStorage.getItem('wqt_home_url') || '/';
+    let token = localStorage.getItem('WQT_AUTH_TOKEN') || sessionStorage.getItem('WQT_AUTH_TOKEN');
+    let userData = null;
+    let myActivities = [];
+
+    // 动态绑定"前往登录"按钮
+    document.getElementById('go-login-btn').onclick = () => location.href = HOME_URL;
+
+    const LEVEL_INFO = {
+      initial: { label: '🔵 初始守望者', cls: 'level-initial' },
+      advanced: { label: '🟡 进阶守望者', cls: 'level-advanced' },
+      mentor: { label: '🔴 导师级守望者', cls: 'level-mentor' },
+    };
+
+    function showToast(msg, color = '#4CAF50') {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.style.background = color; t.style.display = 'block';
+      setTimeout(() => t.style.display = 'none', 2500);
+    }
+
+    function switchTab(name, btn) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.getElementById('tab-' + name).classList.add('active');
+      btn.classList.add('active');
+    }
+
+    function showLoginWall(msg) {
+      const wall = document.getElementById('login-wall');
+      wall.style.display = 'block';
+      if (msg) wall.querySelector('p').textContent = msg;
+    }
+
+    async function loadUser() {
+      if (!token) { showLoginWall(); return; }
+      try {
+        const res = await fetch(API_BASE + '/me', { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) {
+          if (res.status === 401) {
+            const err = await res.json().catch(() => ({}));
+            // 注意：不清除 token！避免返回首页时丢失登录状态
+            if (err.code === 'ENV_MISMATCH') {
+              showLoginWall('你已在其他环境登录，请重新登录');
+            } else {
+              showLoginWall('登录已过期，请重新登录');
+            }
+          } else {
+            showLoginWall();
+          }
+          return;
+        }
+        const data = await res.json();
+        userData = data.user;
+        document.getElementById('main-content').style.display = 'block';
+        renderProfile();
+        loadActivities();
+        loadUpgradeStatus();
+      } catch (e) {
+        showLoginWall();
+      }
+    }
+
+    function renderProfile() {
+      const u = userData;
+      document.getElementById('guardian-name').textContent = u.guardianName || u.username || '守望者';
+      const lvInfo = LEVEL_INFO[u.watcherLevel] || LEVEL_INFO.initial;
+      const badge = document.getElementById('level-badge');
+      badge.textContent = lvInfo.label;
+      badge.className = 'level-badge ' + lvInfo.cls;
+      // 导师级隐藏升级按钮
+      if (u.watcherLevel === 'mentor') {
+        document.getElementById('upgrade-btn').style.display = 'none';
+      }
+    }
+
+    async function loadUpgradeStatus() {
+      try {
+        const res = await fetch(API_BASE + '/me/level-application', { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) return;
+        const { application } = await res.json();
+        const statusEl = document.getElementById('upgrade-status');
+        const btn = document.getElementById('upgrade-btn');
+        if (application && application.status === 'pending') {
+          btn.disabled = true;
+          statusEl.textContent = '⏳ 升级申请审核中，请等待运营审批';
+          statusEl.style.display = 'block';
+        } else if (application && application.status === 'rejected') {
+          statusEl.textContent = `❌ 申请被驳回：${application.note || '请继续参与活动后重新申请'}`;
+          statusEl.style.display = 'block';
+        }
+      } catch (e) { }
+    }
+
+    async function applyUpgrade() {
+      const btn = document.getElementById('upgrade-btn');
+      btn.disabled = true; btn.textContent = '提交中...';
+      try {
+        const res = await fetch(API_BASE + '/me/level-application', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reason: '我已参与多次活动，申请升级守望师等级' })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('✅ 申请已提交，等待运营审批');
+          document.getElementById('upgrade-status').textContent = '⏳ 升级申请审核中...';
+          document.getElementById('upgrade-status').style.display = 'block';
+        } else {
+          showToast(data.error || '提交失败', '#f44336');
+          btn.disabled = false; btn.textContent = '申请升级';
+        }
+      } catch (e) {
+        showToast('网络错误，请重试', '#f44336');
+        btn.disabled = false; btn.textContent = '申请升级';
+      }
+    }
+
+    async function loadActivities() {
+      try {
+        const res = await fetch(API_BASE + '/me/activities', { headers: { Authorization: 'Bearer ' + token } });
+        if (!res.ok) return;
+        const { activities } = await res.json();
+        myActivities = activities || [];
+        renderActivities();
+        populateActivitySelect();
+      } catch (e) { }
+    }
+
+    function renderActivities() {
+      const container = document.getElementById('activities-list');
+      if (!myActivities.length) {
+        container.innerHTML = '<div class="empty-state"><div class="icon">📅</div><p>暂无活动记录</p><p style="font-size:13px;color:var(--text-muted)">参与一场游戏后，活动记录将显示在这里</p></div>';
+        return;
+      }
+      container.innerHTML = myActivities.map(act => {
+        const date = act.session_started ? new Date(act.session_started).toLocaleDateString('zh-CN') : '--';
+        const score = act.final_score != null ? act.final_score : '--';
+        return `<div class="card">
+        <div class="card-title">${act.name || '独立游戏'}</div>
+        <div class="card-meta">📅 ${date}　🪑 第 ${act.table_no || '--'} 桌</div>
+        <div class="card-score">${score} <span style="font-size:14px;color:var(--text-muted);font-weight:normal">分</span></div>
+      </div>`;
+      }).join('');
+    }
+
+    function populateActivitySelect() {
+      const sel = document.getElementById('feedback-activity');
+      myActivities.forEach(act => {
+        const opt = document.createElement('option');
+        opt.value = act.id || '';
+        opt.textContent = `${act.name || '游戏'} (${new Date(act.session_started || Date.now()).toLocaleDateString('zh-CN')})`;
+        sel.appendChild(opt);
+      });
+    }
+
+    async function submitFeedback(type) {
+      const isReflection = type === 'reflection';
+      const contentEl = document.getElementById(isReflection ? 'feedback-content' : 'bug-content');
+      const btnEl = document.getElementById(isReflection ? 'feedback-btn' : 'bug-btn');
+      const content = contentEl.value.trim();
+      if (!content) { showToast('请输入内容', '#FF9800'); return; }
+
+      btnEl.disabled = true; btnEl.textContent = '提交中...';
+      const body = { type, content };
+      if (isReflection) {
+        const actId = document.getElementById('feedback-activity').value;
+        if (actId) body.activity_id = Number(actId);
+      }
+
+      try {
+        const res = await fetch(API_BASE + '/me/feedback', {
+          method: 'POST',
+          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          showToast('✅ 已发送，感谢你的反馈！');
+          contentEl.value = '';
+        } else {
+          const err = await res.json();
+          showToast(err.error || '提交失败', '#f44336');
+        }
+      } catch (e) {
+        showToast('网络错误，请重试', '#f44336');
+      } finally {
+        btnEl.disabled = false;
+        btnEl.textContent = isReflection ? '提交感想' : '提交反馈';
+      }
+    }
+
+    // 初始化
+    loadUser();
+  </script>
+</body>
+
+</html>
