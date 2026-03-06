@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,18 +13,21 @@
             padding: 20px;
             background: #f5f5f5;
         }
+
         .test-container {
             background: white;
             border-radius: 10px;
             padding: 30px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
+
         .test-section {
             margin: 30px 0;
             padding: 20px;
             border: 1px solid #eee;
             border-radius: 8px;
         }
+
         .test-button {
             padding: 12px 24px;
             background: #667eea;
@@ -34,9 +38,11 @@
             margin: 10px;
             font-size: 14px;
         }
+
         .test-button:hover {
             background: #5a6fd8;
         }
+
         .test-result {
             margin-top: 15px;
             padding: 15px;
@@ -44,14 +50,17 @@
             border-radius: 6px;
             border-left: 4px solid #667eea;
         }
+
         .error {
             border-left-color: #dc3545;
             background: #f8d7da;
         }
+
         .success {
             border-left-color: #28a745;
             background: #d4edda;
         }
+
         pre {
             background: #f1f3f4;
             padding: 10px;
@@ -61,10 +70,11 @@
         }
     </style>
 </head>
+
 <body>
     <div class="test-container">
         <h1>🧪 游戏复盘模块测试</h1>
-        
+
         <div class="test-section">
             <h3>1. 模块加载测试</h3>
             <button class="test-button" onclick="testModuleLoad()">测试模块加载</button>
@@ -118,7 +128,7 @@
             {
                 cardId: 5,
                 question: "朋友发来一个需要输入个人信息的小程序",
-                choice: "B", 
+                choice: "B",
                 scoreChange: { "安全力": 0, "脑波力": 1, "实感力": 0, "创心力": 0, "沟通力": 0 },
                 timeSpent: 45000,
                 isCreativeOption: false,
@@ -228,7 +238,7 @@
         function testModuleLoad() {
             const resultDiv = document.getElementById('module-test-result');
             resultDiv.style.display = 'block';
-            
+
             if (window.gameReviewModule && typeof window.gameReviewModule.generateFullReport === 'function') {
                 resultDiv.className = 'test-result success';
                 resultDiv.innerHTML = '✅ 模块加载成功！GameReviewModule 已正确初始化。';
@@ -242,9 +252,9 @@
             const resultDiv = document.getElementById('ai-test-result');
             resultDiv.style.display = 'block';
             resultDiv.innerHTML = '⏳ 正在测试AI连接...';
-            
+
             try {
-                const response = await fetch('/api/llm/story', {
+                const response = await fetch('api/llm/story', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -256,7 +266,7 @@
                         temperature: 0.1
                     })
                 });
-                
+
                 if (response.ok) {
                     const data = await response.json();
                     resultDiv.className = 'test-result success';
@@ -281,20 +291,20 @@
             const resultDiv = document.getElementById('extraction-test-result');
             resultDiv.style.display = 'block';
             resultDiv.innerHTML = '⏳ 正在测试数据提取...';
-            
+
             try {
                 // 临时替换 API 调用
                 const originalCallLLM = window.gameReviewModule.callLLMAPI;
                 window.gameReviewModule.callLLMAPI = mockLLMAPI;
-                
+
                 const result = await window.gameReviewModule.extractInterestingData(mockGameHistory, mockGameAnalytics);
-                
+
                 resultDiv.className = 'test-result success';
                 resultDiv.innerHTML = `
                     ✅ 数据提取测试成功！
                     <pre>${JSON.stringify(result, null, 2)}</pre>
                 `;
-                
+
                 // 恢复原始方法
                 window.gameReviewModule.callLLMAPI = originalCallLLM;
             } catch (error) {
@@ -307,19 +317,19 @@
             const resultDiv = document.getElementById('story-test-result');
             resultDiv.style.display = 'block';
             resultDiv.innerHTML = '⏳ 正在测试故事生成...';
-            
+
             try {
                 // 临时替换 API 调用
                 const originalCallLLM = window.gameReviewModule.callLLMAPI;
                 window.gameReviewModule.callLLMAPI = mockLLMAPI;
-                
+
                 const mockAnalysisData = {
                     keyMoments: [{ type: 'breakthrough', cardId: 8, impact: 4 }],
                     decisionPatterns: [{ pattern: 'creative_thinking', frequency: 1 }],
                     growthHighlights: [{ moment: '创心力技能使用' }],
                     reflectionPoints: [{ moment: '深思熟虑的选择' }]
                 };
-                
+
                 const mockGameStats = {
                     cardsCompleted: 4,
                     totalTime: 360000,
@@ -327,9 +337,9 @@
                     skillUsage: 2,
                     creativeChoices: 1
                 };
-                
+
                 const storyParts = await window.gameReviewModule.generateStoryParts(mockAnalysisData, mockGameStats);
-                
+
                 resultDiv.className = 'test-result success';
                 resultDiv.innerHTML = `
                     ✅ 故事生成测试成功！
@@ -342,7 +352,7 @@
                         ${storyParts.part2.substring(0, 300)}...
                     </div>
                 `;
-                
+
                 // 恢复原始方法
                 window.gameReviewModule.callLLMAPI = originalCallLLM;
             } catch (error) {
@@ -354,13 +364,13 @@
         function testHTMLGeneration() {
             const resultDiv = document.getElementById('html-test-result');
             resultDiv.style.display = 'block';
-            
+
             try {
                 const mockStoryParts = {
                     part1: "# 小伍的成长历程\n\n这是一个温馨的故事...",
                     part2: "# 智慧与启示\n\n通过这次冒险，小伍学到了..."
                 };
-                
+
                 const mockGameStats = {
                     cardsCompleted: 4,
                     totalTime: 360000,
@@ -368,9 +378,9 @@
                     skillUsage: 2,
                     creativeChoices: 1
                 };
-                
+
                 const htmlReport = window.gameReviewModule.generateHTMLReport(mockStoryParts, mockGameStats);
-                
+
                 if (htmlReport && htmlReport.includes('<!DOCTYPE html>') && htmlReport.includes('小伍的AI成长日记')) {
                     resultDiv.className = 'test-result success';
                     resultDiv.innerHTML = `
@@ -391,24 +401,24 @@
             const resultDiv = document.getElementById('full-test-result');
             resultDiv.style.display = 'block';
             resultDiv.innerHTML = '⏳ 正在测试完整流程...';
-            
+
             try {
                 // 临时替换相关方法
                 const originalCallLLM = window.gameReviewModule.callLLMAPI;
                 const originalDownload = window.gameReviewModule.downloadHTMLReport;
-                
+
                 window.gameReviewModule.callLLMAPI = mockLLMAPI;
                 window.gameReviewModule.downloadHTMLReport = (html) => {
                     console.log('模拟下载HTML报告，长度：', html.length);
                 };
-                
+
                 // 模拟进度显示
                 window.gameReviewModule.showProgress = (message, isComplete, isError) => {
                     console.log('进度：', message);
                 };
-                
+
                 await window.gameReviewModule.generateFullReport(mockGameHistory, mockGameAnalytics);
-                
+
                 resultDiv.className = 'test-result success';
                 resultDiv.innerHTML = `
                     ✅ 完整流程测试成功！
@@ -417,7 +427,7 @@
                     <p>✓ HTML报告生成完成</p>
                     <p>✓ 模拟下载完成</p>
                 `;
-                
+
                 // 恢复原始方法
                 window.gameReviewModule.callLLMAPI = originalCallLLM;
                 window.gameReviewModule.downloadHTMLReport = originalDownload;
@@ -440,4 +450,5 @@
         });
     </script>
 </body>
+
 </html>

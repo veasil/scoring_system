@@ -159,6 +159,13 @@ window.addEventListener('load', () => {
     const welcomeScreen = document.getElementById('welcome-screen');
     if (!welcomeScreen) return;
 
+    // 检查是否需要跳过欢迎页 (从完善资料页返回时)
+    if (sessionStorage.getItem('skip_intro') === 'true') {
+        welcomeScreen.style.display = 'none';
+        sessionStorage.removeItem('skip_intro'); //清除标记，下次刷新还会显示（或者保留取决于需求，这里先清除以免一直不显示）
+        return;
+    }
+
     // 初始化星空
     new Starfield('welcome-canvas', () => {
         // 动画结束回调

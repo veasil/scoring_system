@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -12,16 +13,42 @@
             padding: 20px;
             background: #f5f5f5;
         }
+
         .test-card {
             background: white;
             border-radius: 8px;
             padding: 20px;
             margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
-        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 10px; border-radius: 4px; margin: 10px 0; }
-        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin: 10px 0; }
-        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; padding: 10px; border-radius: 4px; margin: 10px 0; }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+
         button {
             background: #007bff;
             color: white;
@@ -31,13 +58,18 @@
             cursor: pointer;
             margin: 5px;
         }
-        button:hover { background: #0056b3; }
+
+        button:hover {
+            background: #0056b3;
+        }
+
         input {
             padding: 8px;
             margin: 5px;
             border: 1px solid #ddd;
             border-radius: 4px;
         }
+
         pre {
             background: #f8f9fa;
             padding: 10px;
@@ -46,22 +78,23 @@
         }
     </style>
 </head>
+
 <body>
     <h1>数据库连接测试</h1>
-    
+
     <div class="test-card">
         <h2>数据库状态检查</h2>
         <button onclick="testDatabase()">测试数据库连接</button>
         <div id="db-result"></div>
     </div>
-    
+
     <div class="test-card">
         <h2>Bmob短信服务测试</h2>
         <input type="text" id="test-phone" placeholder="输入测试手机号">
         <button onclick="testSms()">测试发送短信</button>
         <div id="sms-result"></div>
     </div>
-    
+
     <div class="test-card">
         <h2>完整登录流程测试</h2>
         <input type="text" id="login-phone" placeholder="手机号">
@@ -81,12 +114,12 @@
                     },
                     body: options.body ? JSON.stringify(options.body) : null
                 });
-                
+
                 if (!response.ok) {
                     const text = await response.text();
                     return { ok: false, status: response.status, error: `HTTP ${response.status}: ${text}` };
                 }
-                
+
                 const data = await response.json();
                 return { ok: true, status: response.status, data };
             } catch (error) {
@@ -97,9 +130,9 @@
         async function testDatabase() {
             const resultDiv = document.getElementById('db-result');
             resultDiv.innerHTML = '<div class="info">测试中...</div>';
-            
-            const result = await api('/api/db/test');
-            
+
+            const result = await api('api/db/test');
+
             if (result.ok && result.data) {
                 const tables = result.data.database?.tables;
                 if (tables) {
@@ -127,19 +160,19 @@
         async function testSms() {
             const phone = document.getElementById('test-phone').value.trim();
             const resultDiv = document.getElementById('sms-result');
-            
+
             if (!phone) {
                 resultDiv.innerHTML = '<div class="error">请输入手机号</div>';
                 return;
             }
-            
+
             resultDiv.innerHTML = '<div class="info">发送中...</div>';
-            
-            const result = await api('/api/auth/sms/send', {
+
+            const result = await api('api/auth/sms/send', {
                 method: 'POST',
                 body: { phone }
             });
-            
+
             if (result.ok) {
                 resultDiv.innerHTML = `
                     <div class="success">✅ 短信发送成功</div>
@@ -157,19 +190,19 @@
             const phone = document.getElementById('login-phone').value.trim();
             const code = document.getElementById('login-code').value.trim();
             const resultDiv = document.getElementById('login-result');
-            
+
             if (!phone || !code) {
                 resultDiv.innerHTML = '<div class="error">请输入手机号和验证码</div>';
                 return;
             }
-            
+
             resultDiv.innerHTML = '<div class="info">登录中...</div>';
-            
-            const result = await api('/api/auth/sms/verify', {
+
+            const result = await api('api/auth/sms/verify', {
                 method: 'POST',
                 body: { phone, code }
             });
-            
+
             if (result.ok) {
                 const user = result.data.user;
                 resultDiv.innerHTML = `
@@ -192,4 +225,5 @@
         });
     </script>
 </body>
+
 </html>

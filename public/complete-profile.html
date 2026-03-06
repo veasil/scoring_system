@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -15,40 +16,47 @@
             align-items: center;
             justify-content: center;
         }
+
         .container {
             background: white;
             border-radius: 16px;
             padding: 40px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             max-width: 400px;
             width: 90%;
             text-align: center;
         }
+
         .logo {
             font-size: 2.5rem;
             margin-bottom: 10px;
             color: #667eea;
         }
+
         h1 {
             color: #333;
             margin-bottom: 10px;
             font-size: 1.8rem;
         }
+
         .subtitle {
             color: #666;
             margin-bottom: 30px;
             line-height: 1.6;
         }
+
         .form-group {
             margin-bottom: 20px;
             text-align: left;
         }
+
         label {
             display: block;
             margin-bottom: 8px;
             color: #333;
             font-weight: 500;
         }
+
         input {
             width: 100%;
             padding: 12px 16px;
@@ -58,10 +66,12 @@
             transition: border-color 0.3s;
             box-sizing: border-box;
         }
+
         input:focus {
             outline: none;
             border-color: #667eea;
         }
+
         .btn {
             width: 100%;
             padding: 14px;
@@ -75,19 +85,23 @@
             transition: background 0.3s;
             margin-top: 10px;
         }
+
         .btn:hover {
             background: #5a6fd8;
         }
+
         .btn:disabled {
             background: #ccc;
             cursor: not-allowed;
         }
+
         .error {
             color: #dc3545;
             font-size: 14px;
             margin-top: 10px;
             text-align: center;
         }
+
         .hint {
             color: #666;
             font-size: 14px;
@@ -96,45 +110,35 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="logo">🎮</div>
         <h1>欢迎加入伍力全开！</h1>
         <p class="subtitle">请设置您的守望师名字，这将是您在游戏中的身份标识</p>
-        
+
         <form id="profile-form">
             <div class="form-group">
                 <label for="guardian-name">守望师名字 *</label>
-                <input 
-                    type="text" 
-                    id="guardian-name" 
-                    placeholder="请输入您的守望师名字" 
-                    maxlength="20"
-                    required
-                >
+                <input type="text" id="guardian-name" placeholder="请输入您的守望师名字" maxlength="20" required>
             </div>
-            
+
             <div class="form-group">
                 <label for="wechat-id">微信号（选填）</label>
-                <input 
-                    type="text" 
-                    id="wechat-id" 
-                    placeholder="暂未开放，敬请期待" 
-                    disabled
-                    style="background: #f5f5f5; color: #999;"
-                >
+                <input type="text" id="wechat-id" placeholder="暂未开放，敬请期待" disabled
+                    style="background: #f5f5f5; color: #999;">
                 <div class="hint" style="margin-top: 5px; font-size: 12px; color: #999;">
                     微信绑定功能正在开发中，后续版本将支持
                 </div>
             </div>
-            
+
             <button type="submit" class="btn" id="submit-btn">
                 完成设置，开始游戏
             </button>
-            
+
             <div id="error-message" class="error"></div>
         </form>
-        
+
         <p class="hint">
             守望师名字将用于游戏记录和复盘报告中，建议使用真实姓名或昵称
         </p>
@@ -154,65 +158,66 @@
         }
 
         async function api(path, options = {}) {
-            const headers = { 
+            const headers = {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
             };
-            
+
             const response = await fetch(path, {
                 method: options.method || 'GET',
                 headers,
                 body: options.body ? JSON.stringify(options.body) : null
             });
-            
+
             if (!response.ok) {
                 const error = await response.json().catch(() => ({ error: '请求失败' }));
                 throw new Error(error.error || `HTTP ${response.status}`);
             }
-            
+
             return await response.json();
         }
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             const guardianName = guardianNameInput.value.trim();
             const wechatId = document.getElementById('wechat-id').value.trim();
-            
+
             if (!guardianName) {
                 errorMessage.textContent = '请输入守望师名字';
                 return;
             }
-            
+
             if (guardianName.length < 1 || guardianName.length > 20) {
                 errorMessage.textContent = '守望师名字长度应在1-20个字符之间';
                 return;
             }
-            
+
             submitBtn.disabled = true;
             submitBtn.textContent = '设置中...';
             errorMessage.textContent = '';
-            
+
             try {
                 const requestBody = { guardianName };
                 if (wechatId) {
                     requestBody.wechatOpenid = wechatId;
                 }
-                
-                const result = await api('/api/auth/complete-profile', {
+
+                const result = await api('api/auth/complete-profile', {
                     method: 'POST',
                     body: requestBody
                 });
-                
+
                 // 更新本地用户信息（可选）
                 localStorage.setItem('WQT_USER_INFO', JSON.stringify(result.user));
-                
+
                 // 显示成功消息并跳转
                 submitBtn.textContent = '设置成功！';
+                sessionStorage.setItem('skip_intro', 'true'); // 标记跳过欢迎页
                 setTimeout(() => {
                     window.location.href = '/';
                 }, 1000);
-                
+
             } catch (error) {
                 errorMessage.textContent = error.message;
                 submitBtn.disabled = false;
@@ -229,4 +234,5 @@
         guardianNameInput.focus();
     </script>
 </body>
+
 </html>

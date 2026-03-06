@@ -40,8 +40,9 @@
             <div class="game-controls">
                 <div class="mode-selector">
                     <button id="tabletop-mode" class="mode-btn active">桌游模式</button>
-                    <button id="player-mode" class="mode-btn">玩家模式</button>
                     <button id="supervisor-mode" class="mode-btn">监督模式</button>
+                    <a href="/my.html" id="my-page-btn" class="mode-btn"
+                        style="text-decoration:none;display:none">我的</a>
                 </div>
                 <div class="timer-display">
                     <div class="timer-controls">
@@ -132,13 +133,6 @@
                             </div>
                         </div>
                     </div>
-                </div>
-            </div>
-
-            <!-- 玩家模式界面 (暂时隐藏) -->
-            <div id="player-interface" class="game-interface">
-                <div class="card-display">
-                    <p>玩家模式开发中...</p>
                 </div>
             </div>
 
@@ -352,6 +346,19 @@
         </div>
     </div>
 
+    <!-- 阶段通关反馈模态框 -->
+    <div id="phase-modal" class="modal">
+        <div class="modal-content" style="max-width: 450px; text-align: center;">
+            <div id="phase-modal-body" style="padding: 20px;">
+                <!-- 动态内容将在此处插入 -->
+            </div>
+            <button id="phase-continue-btn" class="auth-btn btn-premium gradient-primary"
+                style="margin-top: 20px; width: 100%;">
+                继续下一阶段
+            </button>
+        </div>
+    </div>
+
     <style>
         .mode-choice-card {
             flex: 1;
@@ -419,7 +426,7 @@
                 // 加载系统配置
                 await loadSystemSettings();
 
-                const res = await fetch('/api/cards');
+                const res = await fetch('api/cards');
                 if (res.ok) {
                     const data = await res.json();
                     window.CARD_DATA = data.cards;
@@ -447,7 +454,7 @@
 
             async function loadSystemSettings() {
                 try {
-                    const data = await api('/api/settings');
+                    const data = await api('api/settings');
                     if (data.ok && data.settings) {
                         data.settings.forEach(s => {
                             systemSettings[s.key] = s.value;
@@ -560,6 +567,13 @@
                 user: null
             };
 
+            // 登录成功后保存环境标记，供 /my.html 使用
+            function saveEnvMarkers() {
+                const isStaging = window.location.pathname.startsWith('/staging/');
+                localStorage.setItem('wqt_api_base', isStaging ? '/staging/api' : '/api');
+                localStorage.setItem('wqt_home_url', isStaging ? '/staging/' : '/');
+            }
+
             const loginBtn = document.getElementById('login-btn');
             const userBadge = document.getElementById('user-badge');
             const userName = document.getElementById('user-name');
@@ -586,6 +600,8 @@
                 return data;
             }
 
+            const myPageBtn = document.getElementById('my-page-btn');
+
             function setAuthUI(loggedIn) {
                 if (loggedIn) {
                     loginBtn.classList.add('hidden');
@@ -594,10 +610,12 @@
                     userName.textContent = `Hi, ${displayName}`;
                     newGameBtn.disabled = false;
                     newGameBtn.title = '';
+                    if (myPageBtn) myPageBtn.style.display = 'inline-flex';
                 } else {
                     loginBtn.classList.remove('hidden');
                     userBadge.classList.add('hidden');
                     userName.textContent = '';
+                    if (myPageBtn) myPageBtn.style.display = 'none';
                     newGameBtn.disabled = true;
                     newGameBtn.title = '请先登录后开始新游戏';
                 }
@@ -609,14 +627,19 @@
                     return;
                 }
                 try {
-                    const me = await api('/api/me');
+                    const me = await api('api/me');
                     authState.user = me.user;
+                    saveEnvMarkers(); // 每次验证成功都保存环境标记，确保 my.html 返回时用对路径
                     setAuthUI(true);
                 } catch (e) {
-                    // token 失效
-                    authState.token = null;
-                    authState.user = null;
-                    localStorage.removeItem('WQT_AUTH_TOKEN');
+                    // 仅在明确 token 无效时清除（401），网络错误等不清除
+                    const isAuthError = e.message && (e.message.includes('401') || e.message.includes('过期') || e.message.includes('未登录'));
+                    if (isAuthError) {
+                        authState.token = null;
+                        authState.user = null;
+                        localStorage.removeItem('WQT_AUTH_TOKEN');
+                        localStorage.removeItem('WQT_USER_CACHE');
+                    }
                     if (window.GameReview && window.GameReview.setSessionId) {
                         window.GameReview.setSessionId(null);
                     }
@@ -633,7 +656,7 @@
             });
 
             logoutBtn.onclick = async () => {
-                try { await api('/api/auth/logout', { method: 'POST' }); } catch (_) { }
+                try { await api('api/auth/logout', { method: 'POST' }); } catch (_) { }
                 authState.token = null;
                 authState.user = null;
                 localStorage.removeItem('WQT_AUTH_TOKEN');
@@ -708,7 +731,7 @@
                 smsStatus.textContent = '发送中...';
                 smsSendBtn.disabled = true;
                 try {
-                    const ret = await api('/api/auth/sms/send', { method: 'POST', body: { phone } });
+                    const ret = await api('api/auth/sms/send', { method: 'POST', body: { phone } });
                     const expireSec = ret.expiresInSeconds || 300;
                     smsStatus.textContent = `验证码已发送，${expireSec}秒内有效。模拟环境验证码：${ret.mockCode || '请查看控制台日志'}`;
                     startSmsCountdown(60);
@@ -724,10 +747,11 @@
                 const code = codeInput.value.trim();
                 if (!phone || !code) { alert('请输入手机号和验证码'); return; }
                 try {
-                    const ret = await api('/api/auth/sms/verify', { method: 'POST', body: { phone, code } });
+                    const ret = await api('api/auth/sms/verify', { method: 'POST', body: { phone, code } });
                     authState.token = ret.token;
                     authState.user = ret.user;
                     localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
+                    saveEnvMarkers();
 
                     // 检查是否为新用户
                     if (ret.user.isNewUser) {
@@ -758,7 +782,7 @@
 
                 try {
                     // 调用后端验证接口，不再在前端硬编码 Check
-                    const ret = await api('/api/auth/dev-login', {
+                    const ret = await api('api/auth/dev-login', {
                         method: 'POST',
                         body: { key }
                     });
@@ -766,6 +790,7 @@
                     authState.token = ret.token;
                     authState.user = ret.user;
                     localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
+                    saveEnvMarkers();
                     setAuthUI(true);
                     closeAuthModal();
                     alert('开发者模式登录成功！');
@@ -787,7 +812,7 @@
                 wechatStatus.textContent = '';
                 qrImgBox.innerHTML = '<span style="opacity:.6;">生成中…</span>';
                 try {
-                    const ret = await api('/api/auth/wechat/qr');
+                    const ret = await api('api/auth/wechat/qr');
                     if (!ret.qrUrl || !ret.sessionId) throw new Error('后端未返回二维码信息');
                     qrImgBox.innerHTML = `<img src="${ret.qrUrl}" alt="微信登录二维码" />`;
                     wechatStatus.textContent = '请用微信扫码确认登录…';
@@ -796,12 +821,13 @@
                     if (wechatPollTimer) clearInterval(wechatPollTimer);
                     wechatPollTimer = setInterval(async () => {
                         try {
-                            const r = await api(`/api/auth/wechat/poll?sessionId=${encodeURIComponent(ret.sessionId)}`);
+                            const r = await api(`api/auth/wechat/poll?sessionId=${encodeURIComponent(ret.sessionId)}`);
                             if (r && r.token) {
                                 clearInterval(wechatPollTimer);
                                 authState.token = r.token;
                                 authState.user = r.user;
                                 localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
+                                saveEnvMarkers();
                                 setAuthUI(true);
                                 closeAuthModal();
                             }
@@ -854,6 +880,74 @@
             }
 
 
+            // 阶段通关检测与反馈
+            let notifiedPhases = new Set(); // 记录当前游戏已弹过反馈的阶段
+
+            function checkPhaseCompletion() {
+                const state = window.globalState.state;
+                const config = window.globalState.cardsPerPhase || { '启蒙期': 5, '成长期': 5, '青春期': 5 };
+                const completed = state.cardsCompleted;
+
+                // 计算各阶段的阈值
+                let phaseThresholds = [];
+                let acc = 0;
+                for (const [phase, count] of Object.entries(config)) {
+                    if (count > 0) {
+                        acc += count;
+                        phaseThresholds.push({ phase, count, threshold: acc });
+                    }
+                }
+
+                // 查找当前刚好完成的阶段
+                for (let i = 0; i < phaseThresholds.length; i++) {
+                    const thresholdObj = phaseThresholds[i];
+                    // 仅当刚达到阈值，才触发阶段通关。但最后阶段通常会有全体通关界面，因此跳过最后一个阶段。
+                    if (completed === thresholdObj.threshold && i < phaseThresholds.length - 1) {
+                        if (!notifiedPhases.has(thresholdObj.phase)) {
+                            notifiedPhases.add(thresholdObj.phase);
+                            showPhaseFeedback(thresholdObj.phase);
+                        }
+                    }
+                }
+            }
+
+            function showPhaseFeedback(phaseName) {
+                // 播放特定音效
+                playSound('success');
+
+                const attrs = window.globalState.getAttributes();
+                const totalScore = Object.values(attrs).reduce((sum, val) => sum + val, 0);
+
+                let statsHtml = '<div style="display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 15px;">';
+                for (const [key, val] of Object.entries(attrs)) {
+                    statsHtml += `
+                        <div style="background: rgba(0, 123, 255, 0.1); padding: 8px 12px; border-radius: 8px; min-width: 80px;">
+                            <div style="font-size: 12px; color: #666;">${key}</div>
+                            <div style="font-size: 18px; font-weight: bold; color: #007bff;">${val}</div>
+                        </div>
+                    `;
+                }
+                statsHtml += '</div>';
+
+                document.getElementById('phase-modal-body').innerHTML = `
+                    <h2 style="color: #28a745; margin-bottom: 5px;">🎉 恭喜！</h2>
+                    <h3 style="margin-top: 0; color: #333;">您已完成【${phaseName}】</h3>
+                    <p style="color: #666; font-size: 14px; margin-top: 15px;">当前您的伍力值总分为：</p>
+                    <div style="font-size: 40px; font-weight: bold; color: #28a745; margin: 10px 0;">${totalScore}</div>
+                    ${statsHtml}
+                `;
+
+                document.getElementById('phase-modal').style.display = 'block';
+            }
+
+            // 绑定阶段反馈模态框关闭事件
+            const phaseModal = document.getElementById('phase-modal');
+            const phaseContinueBtn = document.getElementById('phase-continue-btn');
+            phaseContinueBtn.onclick = () => {
+                phaseModal.style.display = 'none';
+            };
+
+
             // 音效系统已移至 sound-effects.js
             let gameAnalytics = {
                 cardsPlayed: [],
@@ -867,8 +961,114 @@
             let hasFinishedSession = false;
             const cardTimeMarks = {};
 
+            function clearGameState() {
+                localStorage.removeItem('WQT_GAME_STATE');
+            }
+
+            function saveGameState() {
+                if (!activeSessionId || hasFinishedSession) return;
+                const stateToSave = {
+                    gameTime,
+                    attributes: window.globalState.getAttributes(),
+                    cardsCompleted: window.globalState.state.cardsCompleted,
+                    stageFailures: window.globalState.state.stageFailures,
+                    currentPhase: window.globalState.state.currentPhase,
+                    skillsUsed,
+                    creativeOptions,
+                    activeSessionId,
+                    setupData,
+                    targetCards: window.globalState.targetCards,
+                    cardsPerPhase: window.globalState.cardsPerPhase,
+                    isPaused,
+                    notifiedPhases: Array.from(notifiedPhases),
+                    gameAnalytics,
+                    savedAt: Date.now()
+                };
+                localStorage.setItem('WQT_GAME_STATE', JSON.stringify(stateToSave));
+            }
+
+            function loadGameState() {
+                const saved = localStorage.getItem('WQT_GAME_STATE');
+                if (!saved) return false;
+                try {
+                    const state = JSON.parse(saved);
+                    if (!state.activeSessionId) return false;
+
+                    if (!confirm('检测到有进行中的游戏，是否恢复？\n\n选择"取消"将丢弃暂离的进度。')) {
+                        clearGameState();
+                        return false;
+                    }
+
+                    // 恢复变量
+                    activeSessionId = state.activeSessionId;
+                    setupData = state.setupData;
+
+                    gameTime = state.gameTime;
+                    const elapsed = Math.floor((Date.now() - state.savedAt) / 1000);
+                    gameTime = Math.max(0, gameTime - elapsed);
+
+                    window.globalState.setAttributes(state.attributes);
+                    window.globalState.state.cardsCompleted = state.cardsCompleted;
+                    window.globalState.state.stageFailures = state.stageFailures;
+                    window.globalState.state.currentPhase = state.currentPhase;
+                    window.globalState.targetCards = state.targetCards;
+                    window.globalState.cardsPerPhase = state.cardsPerPhase;
+
+                    skillsUsed = state.skillsUsed || { '安全力': false, '脑波力': false, '实感力': false, '创心力': false, '沟通力': false };
+                    creativeOptions = state.creativeOptions || {};
+                    isPaused = state.isPaused || false;
+                    notifiedPhases = new Set(state.notifiedPhases || []);
+                    if (state.gameAnalytics) gameAnalytics = Object.assign(gameAnalytics, state.gameAnalytics);
+
+                    hasStartedNewGame = true;
+                    if (timerInterval) clearInterval(timerInterval);
+
+                    // 恢复 UI
+                    document.getElementById('current-phase').textContent = `当前阶段: ${window.globalState.state.currentPhase}`;
+                    document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/${window.globalState.targetCards}`;
+                    document.getElementById('stage-failures').textContent = `阶段失败: ${window.globalState.state.stageFailures}/3`;
+                    document.getElementById('pause-game').textContent = isPaused ? '继续' : '暂停';
+
+                    document.querySelectorAll('.skill-checkbox').forEach(cb => {
+                        const skillName = cb.nextElementSibling.textContent.trim();
+                        cb.checked = !!skillsUsed[skillName];
+                    });
+
+                    document.querySelector('.timer-controls').style.display = 'none';
+                    document.getElementById('progress-display').innerHTML = `<p>已恢复进度！当前模式：${setupData.mode === 'standard' ? '标准版' : (setupData.mode === 'essence' ? '精华版' : '自由版')}</p>`;
+
+                    // 重建定时器
+                    timerInterval = setInterval(() => {
+                        if (!isPaused) {
+                            gameTime--;
+                            updateTimer();
+                            if (gameTime % 30 === 0) saveGameState();
+                            if (gameTime <= 0) {
+                                clearInterval(timerInterval);
+                                document.getElementById('timer').style.color = '#dc3545';
+                                document.getElementById('progress-display').innerHTML = '<div style="color: #dc3545; text-align: center; padding: 20px;"><h4>⏰ 时间到！</h4><p>倒计时已结束，但游戏可以继续进行。</p></div>';
+                            }
+                        }
+                    }, 1000);
+                    updateTimer();
+
+                    if (window.updateUI) window.updateUI();
+                    document.getElementById('choice-display').innerHTML = '<p style="text-align:center;">✓ 游戏进度已恢复</p>';
+
+                    if (window.GameReview && window.GameReview.setSessionId) {
+                        window.GameReview.setSessionId(activeSessionId);
+                    }
+                    return true;
+                } catch (e) {
+                    console.error('Failed to load game state:', e);
+                    clearGameState();
+                    return false;
+                }
+            }
+
             function finalizeSession(result) {
                 if (hasFinishedSession) return;
+                clearGameState(); // 清除本地暂离状态
                 const finalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
                 hasFinishedSession = true;
                 if (window.GameReview && window.GameReview.finishSession) {
@@ -1030,6 +1230,8 @@
                                     `;
                                 } else {
                                     document.getElementById('progress-display').innerHTML = `<p>创心力数智技能已使用！创心力 +1，已选择选项D</p>`;
+                                    // 检查是否完成了一个小阶段
+                                    checkPhaseCompletion();
                                 }
                             }
                         } else {
@@ -1191,7 +1393,12 @@
                 }
                 document.getElementById('modal-body').innerHTML = `
                     <h3>卡牌 ${cardNum} - ${card.safetyType}</h3>
-                    <p>${card.event}</p>
+                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+                        <p style="flex: 1; margin: 0;">${card.event}</p>
+                        <button id="play-audio-btn" style="cursor: pointer; padding: 5px 10px; border-radius: 5px; border: 1px solid #ccc; background: #f9f9f9; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
+                            🔊 自动阅读
+                        </button>
+                    </div>
                     <div style="margin-top: 2rem;">
                         <h4>选项：</h4>
                         <div style="margin-top: 1rem;">
@@ -1201,6 +1408,38 @@
                         </div>
                     </div>
                 `;
+
+                // 绑定播放事件
+                const playBtn = document.getElementById('play-audio-btn');
+                if (playBtn) {
+                    playBtn.onclick = () => {
+                        const audioUrl = `http://oss.ai5000days.com/cards_audio/${card.id}.mp3`;
+                        const audio = new Audio(audioUrl);
+
+                        playBtn.disabled = true;
+                        playBtn.textContent = '播报中...';
+
+                        audio.play().catch(e => {
+                            console.error("音频播放失败:", e);
+                            alert('音频播放失败，请稍后再试。');
+                            playBtn.disabled = false;
+                            playBtn.textContent = '🔊 自动阅读';
+                        });
+
+                        audio.onended = () => {
+                            playBtn.disabled = false;
+                            playBtn.textContent = '🔊 自动阅读';
+                        };
+
+                        audio.onerror = () => {
+                            console.error("音频资源加载失败");
+                            alert('未找到该卡牌的音频资源。');
+                            playBtn.disabled = false;
+                            playBtn.textContent = '🔊 自动阅读';
+                        };
+                    };
+                }
+
                 document.getElementById('modal').style.display = 'block';
             };
 
@@ -1242,7 +1481,7 @@
                         window.globalState.state.cardsCompleted++;
 
                         // 更新桌游模式显示
-                        document.getElementById('current-phase').textContent = `当前阶段: ${card.phase}`;
+                        document.getElementById('current-phase').textContent = `当前阶段: ${card.phase} `;
                         document.getElementById('cards-completed').textContent = `已完成: ${window.globalState.state.cardsCompleted}/${window.globalState.targetCards || 15}`;
                         document.getElementById('stage-failures').textContent = `阶段失败: ${window.globalState.state.stageFailures}/3`;
 
@@ -1304,6 +1543,8 @@
                                     <p>${option.consequence}</p>
                                     </div>
                                 `;
+                                // 检查是否完成了一个小阶段
+                                checkPhaseCompletion();
                             }
                         }
 
@@ -1551,7 +1792,7 @@
                 Object.keys(cardTimeMarks).forEach(key => delete cardTimeMarks[key]);
 
                 try {
-                    const startRet = await api('/api/game/start', {
+                    const startRet = await api('api/game/start', {
                         method: 'POST',
                         body: {
                             ts: Date.now(),
@@ -1588,6 +1829,7 @@
                 window.globalState.cardsPerPhase = settings.cardsPerPhase;
 
                 isPaused = false;
+                notifiedPhases.clear(); // 新游戏重置阶段通知记录
                 window.globalState.state.cardsCompleted = 0;
                 window.globalState.state.stageFailures = 0;
                 window.globalState.state.currentPhase = '启蒙期';
@@ -1741,10 +1983,32 @@
                     if (success) {
                         recordBtn.textContent = '■';
                         recordBtn.style.color = '#dc3545';
+                        recordBtn.title = '正在录音，再次点击停止并上传';
                         recorder.drawWaveform(waveCanvas);
                     }
+                } else {
+                    // 改变 UI 状态
+                    recordBtn.textContent = '...';
+                    recordBtn.style.color = '#ffc107';
+                    recordBtn.disabled = true;
+                    recordBtn.title = '正在处理并上传...';
+
+                    recorder.stopRecording();
+
+                    // 这里的状态恢复实际上应该在上传完成后，但由于 logic 在 AudioRecorder 内部，
+                    // 我们先在这里做一个简单的延时恢复，或者让 AudioRecorder 通知。
+                    // 为了快速修复，我们可以简单地在 stopRecording 之后恢复按钮点击。
+                    setTimeout(() => {
+                        recordBtn.textContent = '●';
+                        recordBtn.style.color = '';
+                        recordBtn.disabled = false;
+                        recordBtn.title = '点击录音';
+                    }, 1000);
                 }
             };
+
+            // 初始化登录状态
+            initAuth();
 
             // 初始化 Lucide 图标
             if (window.lucide) {

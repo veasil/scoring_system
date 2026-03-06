@@ -156,7 +156,7 @@ class AudioRecorder {
                 return;
             }
 
-            const res = await fetch("/api/upload/audio", {
+            const res = await fetch("api/upload/audio", {
                 method: "POST",
                 headers: {
                     "Authorization": `Bearer ${token}`
@@ -166,19 +166,27 @@ class AudioRecorder {
 
             if (res.ok) {
                 const data = await res.json();
-                console.log("录音上传成功:", data.url);
-                // 可选：通知用户或在界面上显示
-                // alert(`录音已上传: ${data.url}`);
+                console.log("✅ 录音上传成功:", data.url);
+                // 在进度展示区显示一条带有链接的消息
+                const progressBox = document.getElementById('progress-display');
+                if (progressBox) {
+                    progressBox.innerHTML = `
+                        <p style="color: #28a745; margin-bottom: 5px;">🎤 录音已上传成功！</p>
+                        <a href="${data.url}" target="_blank" style="color: #007bff; font-size: 12px; word-break: break-all;">${data.url}</a>
+                    `;
+                }
             } else {
                 const err = await res.json();
-                console.error("上传失败:", err);
-                alert("录音上传失败，已保存到本地");
+                console.error("❌ 上传失败:", err);
+                alert("录音上传至服务器失败，已尝试保存到本地，请检查网络或登录状态");
                 this.saveRecordingLocally(audioBlob);
             }
         } catch (error) {
-            console.error("上传出错:", error);
-            alert("上传出错，已保存到本地");
+            console.error("❌ 上传出错:", error);
+            alert("上传过程中发生错误，录音已保存到本地");
             this.saveRecordingLocally(audioBlob);
+        } finally {
+            this.isRecording = false; // 确保状态最终重置
         }
     }
 
