@@ -13,33 +13,81 @@ import { BmobSMS } from "./src/bmob.js";
 
 dotenv.config();
 
+
+
+import crypto from "crypto";
+await initDb();
+await initCardsDb(); // 初始化独立卡牌数据库
+
+// Encryption Helper
+function decryptVal(val) {
+  if (!val || typeof val !== 'string' || !val.startsWith("enc:")) return val;
+  const keyHex = process.env.SETTINGS_ENCRYPTION_KEY;
+  if (!keyHex) return val;
+
+  try {
+    const parts = val.split(":");
+    if (parts.length !== 3) return val;
+
+    // Key
+    const key = Buffer.from(keyHex, 'hex');
+    // IV
+    const iv = Buffer.from(parts[1], 'base64');
+    // Ciphertext
+    const ciphertext = Buffer.from(parts[2], 'base64');
+
+    const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
+    let decrypted = decipher.update(ciphertext);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString('utf-8');
+  } catch (e) {
+    console.error("Decryption failed:", e.message);
+    return val;
+  }
+}
+
+// Load system settings from DB and merge with process.env
+// DB settings take precedence over process.env for these keys
+const dbSettings = await getAllSettings();
+const config = { ...process.env };
+
+if (dbSettings && dbSettings.length > 0) {
+  dbSettings.forEach(s => {
+    // Only override if value is not empty
+    if (s.value && String(s.value).trim()) {
+      config[s.key] = decryptVal(s.value);
+    }
+  });
+}
+
+
 const app = express();
-const PORT = Number(process.env.PORT || 8080);
-const JWT_SECRET = process.env.JWT_SECRET || "dev_secret_change_me";
+const PORT = Number(config.PORT || 8080);
+const JWT_SECRET = config.JWT_SECRET || "dev_secret_change_me";
 
 // OSS & Upload
 import OSS from "ali-oss";
 import multer from "multer";
 
 const ossConfig = {
-  accessKeyId: process.env.ALIBABA_CLOUD_ACCESS_KEY_ID,
-  accessKeySecret: process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
-  bucket: process.env.OSS_BUCKET_NAME || "ai5000days-scoring-system-hk",
+  accessKeyId: config.ALIBABA_CLOUD_ACCESS_KEY_ID,
+  accessKeySecret: config.ALIBABA_CLOUD_ACCESS_KEY_SECRET,
+  bucket: config.OSS_BUCKET_NAME || "ai5000days-scoring-system-hk",
   secure: true // 强制使用 HTTPS
 };
 
 // 优先使用标准 Endpoint 进行 API 操作（避免自定义域名 SSL 证书报错）
-if (process.env.OSS_ENDPOINT) {
-  ossConfig.endpoint = process.env.OSS_ENDPOINT;
+if (config.OSS_ENDPOINT) {
+  ossConfig.endpoint = config.OSS_ENDPOINT;
 } else {
-  ossConfig.region = (process.env.OSS_REGION || "oss-cn-hongkong").startsWith("oss-")
-    ? process.env.OSS_REGION
-    : `oss-${process.env.OSS_REGION}`;
+  ossConfig.region = (config.OSS_REGION || "oss-cn-hongkong").startsWith("oss-")
+    ? config.OSS_REGION
+    : `oss-${config.OSS_REGION}`;
 }
 // 注意：不为了 API 操作开启 cname 模式，防止 SSL 校验失败。
 // 自定义域名仅用于生成对外访问链接。
-
-const ossClient = process.env.ALIBABA_CLOUD_ACCESS_KEY_ID && process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET
+// OSS Client Init
+const ossClient = config.ALIBABA_CLOUD_ACCESS_KEY_ID && config.ALIBABA_CLOUD_ACCESS_KEY_SECRET
   ? new OSS(ossConfig)
   : null;
 
@@ -49,9 +97,8 @@ if (ossClient) {
   console.log("   Region/Endpoint:", ossConfig.region || ossConfig.endpoint);
 } else {
   console.log("❌ OSS Client NOT initialized.");
-  console.log("   ALIBABA_CLOUD_ACCESS_KEY_ID present:", !!process.env.ALIBABA_CLOUD_ACCESS_KEY_ID);
-  console.log("   ALIBABA_CLOUD_ACCESS_KEY_SECRET present:", !!process.env.ALIBABA_CLOUD_ACCESS_KEY_SECRET);
-  console.log("   Current ENV Keys:", Object.keys(process.env).filter(k => k.includes("OSS") || k.includes("ALI")));
+  console.log("   ALIBABA_CLOUD_ACCESS_KEY_ID present:", !!config.ALIBABA_CLOUD_ACCESS_KEY_ID);
+  console.log("   ALIBABA_CLOUD_ACCESS_KEY_SECRET present:", !!config.ALIBABA_CLOUD_ACCESS_KEY_SECRET);
 }
 
 const upload = multer({
@@ -59,31 +106,14 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 } // 50MB limit
 });
 
-// ... (skipping Bmob init for brevity, it remains unchanged) ...
-
-// ======== API: Upload to OSS ========
-app.get("/api/test-oss", async (req, res) => {
-  if (!ossClient) return res.status(500).json({ error: "OSS Client not initialized" });
-  try {
-    console.log("Testing OSS connection...");
-    const result = await ossClient.list({ 'max-keys': 1 });
-    console.log("OSS connection success:", result.res.status);
-    res.json({ ok: true, region: ossClient.options.region, bucket: ossClient.options.bucket, result });
-  } catch (e) {
-    console.error("OSS Test Error:", e);
-    res.status(500).json({ ok: false, error: e.message, code: e.code, name: e.name });
-  }
-});
-
-
 
 // 初始化Bmob短信服务
-const bmobSMS = process.env.BMOB_APP_ID && process.env.BMOB_REST_KEY
-  ? new BmobSMS(process.env.BMOB_APP_ID, process.env.BMOB_REST_KEY)
+const bmobSMS = config.BMOB_APP_ID && config.BMOB_REST_KEY
+  ? new BmobSMS(config.BMOB_APP_ID, config.BMOB_REST_KEY)
   : null;
 
-await initDb();
-await initCardsDb(); // 初始化独立卡牌数据库
+
+
 
 app.use(morgan("dev"));
 app.use(express.json({ limit: "2mb" }));
@@ -114,8 +144,10 @@ function generateSmsCode() {
 }
 
 // ======== Auth helpers ========
+const SERVER_ENV = config.SERVER_ENV || 'prod';
+
 function signToken(user) {
-  return jwt.sign({ uid: user.id, username: user.username }, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign({ uid: user.id, username: user.username, env: SERVER_ENV }, JWT_SECRET, { expiresIn: "7d" });
 }
 
 async function authMiddleware(req, res, next) {
@@ -124,6 +156,10 @@ async function authMiddleware(req, res, next) {
   if (!token) return res.status(401).json({ error: "未登录" });
   try {
     const payload = jwt.verify(token, JWT_SECRET);
+    // 校验环境标记：新 token 含 env 字段，必须与当前服务器环境匹配
+    if (payload.env && payload.env !== SERVER_ENV) {
+      return res.status(401).json({ error: "你已在其他环境登录，请重新登录", code: "ENV_MISMATCH" });
+    }
     req.user = payload;
     next();
   } catch (e) {
@@ -191,18 +227,53 @@ app.post("/api/auth/dev-login", async (req, res) => {
 
   // 开发者用户固定逻辑
   const username = 'dev_user';
-  let user = await dbGet("SELECT id, username FROM users WHERE username = ?", [username]);
+  let user = await dbGet("SELECT id, username, role FROM users WHERE username = ?", [username]);
 
   if (!user) {
-    // 自动创建
+    // 自动创建，角色为 boss
     const hash = bcrypt.hashSync("dev123456", 10);
-    const r = await dbRun("INSERT INTO users(username, password_hash) VALUES(?, ?)", [username, hash]);
-    user = { id: r.lastID, username };
+    const r = await dbRun("INSERT INTO users(username, password_hash, role) VALUES(?, ?, 'boss')", [username, hash]);
+    user = { id: r.lastID, username, role: 'boss' };
+  } else if (user.role !== 'boss') {
+    // 确保 dev_user 始终是 boss
+    await dbRun("UPDATE users SET role='boss' WHERE id=?", [user.id]);
+    user.role = 'boss';
   }
 
   const token = signToken(user);
   res.json({
-    user: { id: user.id, username: user.username, isProfileComplete: true },
+    user: { id: user.id, username: user.username, role: user.role, isProfileComplete: true },
+    token
+  });
+});
+
+// Admin Panel 专用手机号登录接口（无需短信验证码，仅限 boss/operator 角色）
+app.post("/api/auth/admin-login", async (req, res) => {
+  const phone = normalizePhone(req.body?.phone || "");
+  if (!phone) return res.status(400).json({ error: "缺少手机号" });
+
+  const user = await dbGet(
+    "SELECT id, phone, username, guardian_name, role FROM users WHERE phone = ?",
+    [phone]
+  );
+
+  if (!user) return res.status(404).json({ error: "用户不存在" });
+
+  const allowedRoles = ["boss", "operator"];
+  if (!allowedRoles.includes(user.role)) {
+    return res.status(403).json({ error: "⛔ 仅 boss 和运营账号可登录管理后台" });
+  }
+
+  const token = signToken({ id: user.id, username: user.phone || user.username });
+  res.json({
+    user: {
+      id: user.id,
+      username: user.username || user.phone,
+      phone: user.phone,
+      guardianName: user.guardian_name,
+      role: user.role,
+      isProfileComplete: true
+    },
     token
   });
 });
@@ -324,7 +395,10 @@ app.post("/api/auth/sms/verify", async (req, res) => {
 app.post("/api/auth/logout", async (_req, res) => res.json({ ok: true }));
 
 app.get("/api/me", authMiddleware, async (req, res) => {
-  const user = await dbGet("SELECT id, username, phone, guardian_name FROM users WHERE id = ?", [req.user.uid]);
+  const user = await dbGet(
+    "SELECT id, username, phone, guardian_name, role, watcher_level, enterprise_id FROM users WHERE id = ?",
+    [req.user.uid]
+  );
   if (!user) return res.status(404).json({ error: "用户不存在" });
 
   res.json({
@@ -333,9 +407,127 @@ app.get("/api/me", authMiddleware, async (req, res) => {
       username: user.username || user.phone,
       phone: user.phone,
       guardianName: user.guardian_name,
-      isProfileComplete: !!user.guardian_name
+      isProfileComplete: !!user.guardian_name,
+      role: user.role || 'watcher',
+      watcherLevel: user.watcher_level || 'initial',
+      enterpriseId: user.enterprise_id || null
     }
   });
+});
+
+// 我的活动列表
+app.get("/api/me/activities", authMiddleware, async (req, res) => {
+  const uid = req.user.uid;
+  try {
+    const rows = await dbAll(`
+      SELECT a.id, a.name, a.activity_code, a.started_at, a.ended_at,
+             as2.table_no, gs.final_score, gs.started_at as session_started,
+             gs.ended_at as session_ended, gs.id as session_id
+      FROM activity_sessions as2
+      JOIN activities a ON a.id = as2.activity_id
+      JOIN game_sessions gs ON gs.id = as2.session_id
+      WHERE gs.user_id = ?
+      ORDER BY gs.started_at DESC
+    `, [uid]);
+    res.json({ activities: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 提交感想/反馈
+app.post("/api/me/feedback", authMiddleware, async (req, res) => {
+  const uid = req.user.uid;
+  const { type = 'reflection', content, activity_id, session_id } = req.body || {};
+  if (!content || !String(content).trim()) return res.status(400).json({ error: "内容不能为空" });
+  try {
+    const result = await dbRun(
+      "INSERT INTO user_feedback(user_id, type, content, activity_id, session_id) VALUES(?,?,?,?,?)",
+      [uid, type, content.trim(), activity_id || null, session_id || null]
+    );
+    res.json({ ok: true, id: result.lastID });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 提交升级申请
+app.post("/api/me/level-application", authMiddleware, async (req, res) => {
+  const uid = req.user.uid;
+  const { reason } = req.body || {};
+  try {
+    const user = await dbGet("SELECT watcher_level FROM users WHERE id = ?", [uid]);
+    if (!user) return res.status(404).json({ error: "用户不存在" });
+
+    // 检查是否已有 pending 申请
+    const existing = await dbGet(
+      "SELECT id FROM watcher_level_applications WHERE user_id = ? AND status = 'pending'", [uid]
+    );
+    if (existing) return res.status(400).json({ error: "已有待审核的申请，请等待" });
+
+    const levelMap = { initial: 'advanced', advanced: 'mentor' };
+    const toLevel = levelMap[user.watcher_level];
+    if (!toLevel) return res.status(400).json({ error: "已是最高等级，无需申请" });
+
+    const result = await dbRun(
+      "INSERT INTO watcher_level_applications(user_id, from_level, to_level, reason) VALUES(?,?,?,?)",
+      [uid, user.watcher_level, toLevel, reason || null]
+    );
+    res.json({ ok: true, id: result.lastID, fromLevel: user.watcher_level, toLevel });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 查询升级申请状态
+app.get("/api/me/level-application", authMiddleware, async (req, res) => {
+  const uid = req.user.uid;
+  try {
+    const row = await dbGet(
+      "SELECT * FROM watcher_level_applications WHERE user_id = ? ORDER BY created_at DESC LIMIT 1",
+      [uid]
+    );
+    res.json({ application: row || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ======== API: 企业账号子账号管理 ========
+app.get("/api/enterprise/members", authMiddleware, async (req, res) => {
+  const uid = req.user.uid;
+  try {
+    const me = await dbGet("SELECT role FROM users WHERE id = ?", [uid]);
+    if (!me || me.role !== 'enterprise') return res.status(403).json({ error: "无权限" });
+    const members = await dbAll(
+      "SELECT id, username, phone, guardian_name, watcher_level, created_at FROM users WHERE enterprise_id = ?",
+      [uid]
+    );
+    res.json({ members });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/enterprise/members/:id/stats", authMiddleware, async (req, res) => {
+  const uid = req.user.uid;
+  const memberId = req.params.id;
+  try {
+    const me = await dbGet("SELECT role FROM users WHERE id = ?", [uid]);
+    if (!me || me.role !== 'enterprise') return res.status(403).json({ error: "无权限" });
+    const member = await dbGet("SELECT enterprise_id FROM users WHERE id = ?", [memberId]);
+    if (!member || String(member.enterprise_id) !== String(uid)) return res.status(403).json({ error: "非旗下子账号" });
+
+    const sessions = await dbAll(
+      "SELECT id, started_at, ended_at, final_score, game_mode FROM game_sessions WHERE user_id = ? ORDER BY started_at DESC",
+      [memberId]
+    );
+    const totalGames = sessions.length;
+    const avgScore = totalGames ? Math.round(sessions.reduce((s, r) => s + (r.final_score || 0), 0) / totalGames) : 0;
+    res.json({ stats: { totalGames, avgScore, sessions } });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // 完善用户资料
@@ -486,6 +678,9 @@ app.get("/api/admin/cards", authMiddleware, async (req, res) => {
       phase: c.phase,
       status: c.status,
       version: c.version,
+      branch: c.branch || 'release',
+      version_label: c.version_label || null,
+      audio_url: c.audio_url || null,
       updatedAt: c.updated_at,
       options: JSON.parse(c.options_json)
     }));
@@ -630,29 +825,117 @@ app.put("/api/cards/:id", authMiddleware, async (req, res) => {
     const phase = updates.phase || existing.phase;
     const status = updates.status || existing.status;
     const optionsJson = updates.options ? JSON.stringify(updates.options) : existing.options_json;
+    const audioUrl = updates.audio_url !== undefined ? (updates.audio_url || null) : existing.audio_url;
 
-    // Version increment
-    const newVersion = (existing.version || 0) + 1;
+    // 当普通修改时，打上测试版标签和包含当前日期的标签
+    const branch = 'draft';
+    const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const submitterName = req.user.username || String(req.user.uid);
+    const versionDescSuffix = updates.versionDesc ? ` · ${updates.versionDesc}` : '';
+    const versionLabel = `v${existing.version || 1}.${nowStr}版 — ${submitterName}${versionDescSuffix}`;
+    const newVersion = existing.version || 1; // 测试版保存不自增 version 绝对值
     const updatedAt = Date.now();
 
-    // If status is becoming 'deleted', set deleted_at?
+    // 保存旧版本到 card_versions 表
+    await cardsDbRun(
+      `INSERT INTO card_versions (card_id, key, safety_type, event, phase, options_json, status, version, version_label, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        existing.id,
+        existing.key,
+        existing.safety_type,
+        existing.event,
+        existing.phase,
+        existing.options_json,
+        existing.status,
+        existing.version || 1,
+        existing.version_label || null,
+        existing.updated_at || existing.created_at || Date.now()
+      ]
+    );
+
+    // Version increment (在普通保存里剥离自增逻辑，挪到了正式发版才会发生)
     let deletedAt = existing.deleted_at;
     if (status === 'deleted' && existing.status !== 'deleted') {
       deletedAt = Date.now();
     } else if (status !== 'deleted') {
-      deletedAt = null; // Restore from recycle bin
+      deletedAt = null;
     }
 
     await cardsDbRun(
-      `UPDATE cards SET safety_type=?, event=?, phase=?, options_json=?, status=?, version=?, updated_at=?, deleted_at=? WHERE id=?`,
-      [safetyType, event, phase, optionsJson, status, newVersion, updatedAt, deletedAt, id]
+      `UPDATE cards SET safety_type=?, event=?, phase=?, options_json=?, status=?, version=?, version_label=?, branch=?, audio_url=?, updated_at=?, deleted_at=? WHERE id=?`,
+      [safetyType, event, phase, optionsJson, status, newVersion, versionLabel, branch, audioUrl, updatedAt, deletedAt, id]
     );
 
-    res.json({ ok: true, id, version: newVersion, status });
+    res.json({ ok: true, id, version: newVersion, versionLabel, branch, status });
 
   } catch (e) {
     console.error("Update Card Error:", e);
     res.status(500).json({ error: "Failed to update card: " + e.message });
+  }
+});
+
+// 4.5 Bulk Publish API (Admin 批量发版)
+app.post("/api/admin/cards/bulk-publish", authMiddleware, async (req, res) => {
+  const { cardIds, secretKey } = req.body;
+  if (!cardIds || !Array.isArray(cardIds) || cardIds.length === 0) {
+    return res.status(400).json({ error: "No cardIds provided" });
+  }
+
+  // Verify secret key using DEV_KEY from DB or ENV
+  const { getSystemSetting } = require("./db"); // Make sure to use existing getSystemSetting
+  let devKey = process.env.DEV_KEY || "sj0127wqt";
+  try {
+    const sysDbRow = await dbGet("SELECT setting_value FROM system_settings WHERE setting_key = 'DEV_KEY'");
+    if (sysDbRow && sysDbRow.setting_value) devKey = sysDbRow.setting_value;
+  } catch (e) { } // ignore if settings table not ready
+
+  if (secretKey !== devKey) {
+    return res.status(403).json({ error: "密钥不正确，拒绝发布！" });
+  }
+
+  try {
+    const results = [];
+    const nowStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    for (const id of cardIds) {
+      const existing = await cardsDbGet("SELECT * FROM cards WHERE id = ?", [id]);
+      if (!existing) continue;
+
+      // 保存旧版本到 card_versions 表
+      await cardsDbRun(
+        `INSERT INTO card_versions (card_id, key, safety_type, event, phase, options_json, status, version, version_label, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          existing.id,
+          existing.key,
+          existing.safety_type,
+          existing.event,
+          existing.phase,
+          existing.options_json,
+          existing.status,
+          existing.version || 1,
+          existing.version_label || null,
+          existing.updated_at || existing.created_at || Date.now()
+        ]
+      );
+
+      // 发版: branch改release, version增加, 名字去日期
+      const newVersion = (existing.version || 0) + 1;
+      const versionLabel = `v${newVersion}版`;
+      const updatedAt = Date.now();
+
+      await cardsDbRun(
+        `UPDATE cards SET status=?, version=?, version_label=?, branch=?, updated_at=? WHERE id=?`,
+        ['active', newVersion, versionLabel, 'release', updatedAt, id]
+      );
+
+      results.push({ id, newVersion, versionLabel });
+    }
+
+    res.json({ ok: true, results });
+  } catch (e) {
+    console.error("Bulk Publish Error:", e);
+    res.status(500).json({ error: "Failed to bulk publish cards: " + e.message });
   }
 });
 
@@ -835,6 +1118,341 @@ app.delete("/api/admin/oss/files", authMiddleware, async (req, res) => {
   } catch (e) {
     console.error("OSS Delete Error:", e);
     res.status(500).json({ error: "删除文件失败: " + e.message });
+  }
+});
+
+// ======== API: 活动管理 ========
+
+// 生成活动码 ACT-001 格式
+async function generateActivityCode() {
+  const row = await dbGet("SELECT MAX(id) as maxId FROM activities");
+  const nextNum = (row?.maxId || 0) + 1;
+  return `ACT-${String(nextNum).padStart(3, '0')}`;
+}
+
+app.get("/api/admin/activities", authMiddleware, async (req, res) => {
+  try {
+    const rows = await dbAll(`
+      SELECT a.*,
+        COUNT(DISTINCT as2.session_id) as table_count,
+        COUNT(DISTINCT gs.user_id) as participant_count,
+        ROUND(AVG(gs.final_score), 1) as avg_score
+      FROM activities a
+      LEFT JOIN activity_sessions as2 ON as2.activity_id = a.id
+      LEFT JOIN game_sessions gs ON gs.id = as2.session_id
+      GROUP BY a.id
+      ORDER BY a.created_at DESC
+    `);
+    res.json({ activities: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/activities", authMiddleware, async (req, res) => {
+  const { name, organizer, started_at, ended_at } = req.body || {};
+  if (!name) return res.status(400).json({ error: "活动名称不能为空" });
+  try {
+    const code = await generateActivityCode();
+    const result = await dbRun(
+      "INSERT INTO activities(name, organizer, activity_code, started_at, ended_at, created_by) VALUES(?,?,?,?,?,?)",
+      [name, organizer || null, code, started_at || null, ended_at || null, req.user.uid]
+    );
+    res.json({ ok: true, id: result.lastID, activity_code: code });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/admin/activities/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { name, organizer, started_at, ended_at, status } = req.body || {};
+  try {
+    const existing = await dbGet("SELECT * FROM activities WHERE id = ?", [id]);
+    if (!existing) return res.status(404).json({ error: "活动不存在" });
+    await dbRun(
+      "UPDATE activities SET name=?, organizer=?, started_at=?, ended_at=?, status=? WHERE id=?",
+      [name || existing.name, organizer ?? existing.organizer, started_at ?? existing.started_at,
+      ended_at ?? existing.ended_at, status || existing.status, id]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/admin/activities/:id/sessions", authMiddleware, async (req, res) => {
+  try {
+    const rows = await dbAll(`
+      SELECT gs.id, gs.started_at, gs.ended_at, gs.final_score, gs.game_mode,
+             u.guardian_name, u.phone, as2.table_no
+      FROM activity_sessions as2
+      JOIN game_sessions gs ON gs.id = as2.session_id
+      JOIN users u ON u.id = gs.user_id
+      WHERE as2.activity_id = ?
+      ORDER BY as2.table_no ASC
+    `, [req.params.id]);
+    res.json({ sessions: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 游戏开始时关联活动（通过活动码）
+app.post("/api/game/join-activity", authMiddleware, async (req, res) => {
+  const { activity_code, session_id } = req.body || {};
+  if (!activity_code || !session_id) return res.status(400).json({ error: "缺少参数" });
+  try {
+    const activity = await dbGet("SELECT * FROM activities WHERE activity_code = ? AND status = 'active'", [activity_code]);
+    if (!activity) return res.status(404).json({ error: "活动码无效或活动已结束" });
+
+    // 获取该活动当前最大桌号
+    const maxTable = await dbGet("SELECT MAX(table_no) as max FROM activity_sessions WHERE activity_id = ?", [activity.id]);
+    const table_no = (maxTable?.max || 0) + 1;
+
+    await dbRun(
+      "INSERT OR IGNORE INTO activity_sessions(activity_id, session_id, table_no) VALUES(?,?,?)",
+      [activity.id, session_id, table_no]
+    );
+    res.json({ ok: true, activity_id: activity.id, activity_name: activity.name, table_no });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ======== API: Admin 等级申请管理 ========
+app.get("/api/admin/level-applications", authMiddleware, async (req, res) => {
+  const { status = 'pending' } = req.query;
+  try {
+    const rows = await dbAll(`
+      SELECT la.*, u.guardian_name, u.phone, u.username
+      FROM watcher_level_applications la
+      JOIN users u ON u.id = la.user_id
+      WHERE la.status = ?
+      ORDER BY la.created_at DESC
+    `, [status]);
+    res.json({ applications: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/admin/level-applications/:id", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { action, note } = req.body || {}; // action: 'approve' | 'reject'
+  if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: "action 必须为 approve 或 reject" });
+  try {
+    const app_row = await dbGet("SELECT * FROM watcher_level_applications WHERE id = ?", [id]);
+    if (!app_row) return res.status(404).json({ error: "申请不存在" });
+    if (app_row.status !== 'pending') return res.status(400).json({ error: "申请已处理" });
+
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+    const now = Date.now();
+    await dbRun(
+      "UPDATE watcher_level_applications SET status=?, reviewed_by=?, reviewed_at=?, note=? WHERE id=?",
+      [newStatus, req.user.uid, now, note || null, id]
+    );
+
+    if (action === 'approve') {
+      // 更新用户等级
+      const oldLevel = app_row.from_level;
+      const newLevel = app_row.to_level;
+      await dbRun("UPDATE users SET watcher_level=? WHERE id=?", [newLevel, app_row.user_id]);
+      await dbRun(
+        "INSERT INTO watcher_level_logs(user_id, old_level, new_level, source, changed_by, note) VALUES(?,?,?,?,?,?)",
+        [app_row.user_id, oldLevel, newLevel, 'application', req.user.uid, note || null]
+      );
+    }
+    res.json({ ok: true, newStatus });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin 手动调整用户等级（boss 专用）
+app.put("/api/admin/users/:id/level", authMiddleware, async (req, res) => {
+  const { id } = req.params;
+  const { level, note } = req.body || {};
+  const validLevels = ['initial', 'advanced', 'mentor'];
+  if (!validLevels.includes(level)) return res.status(400).json({ error: "等级值无效" });
+  try {
+    const user = await dbGet("SELECT watcher_level FROM users WHERE id = ?", [id]);
+    if (!user) return res.status(404).json({ error: "用户不存在" });
+    await dbRun("UPDATE users SET watcher_level=? WHERE id=?", [level, id]);
+    await dbRun(
+      "INSERT INTO watcher_level_logs(user_id, old_level, new_level, source, changed_by, note) VALUES(?,?,?,?,?,?)",
+      [id, user.watcher_level, level, 'manual', req.user.uid, note || null]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Admin 获取用户感想/反馈列表
+app.get("/api/admin/feedback", authMiddleware, async (req, res) => {
+  const { reviewed } = req.query;
+  try {
+    let sql = `
+      SELECT f.*, u.guardian_name, u.phone
+      FROM user_feedback f
+      JOIN users u ON u.id = f.user_id
+    `;
+    const params = [];
+    if (reviewed !== undefined) { sql += " WHERE f.reviewed = ?"; params.push(Number(reviewed)); }
+    sql += " ORDER BY f.created_at DESC";
+    const rows = await dbAll(sql, params);
+    res.json({ feedback: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.put("/api/admin/feedback/:id/read", authMiddleware, async (req, res) => {
+  try {
+    await dbRun("UPDATE user_feedback SET reviewed=1 WHERE id=?", [req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ======== API: 卡牌版本和批注 ========
+app.get("/api/admin/cards/:id/versions", authMiddleware, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const current = await cardsDbGet("SELECT * FROM cards WHERE id = ?", [id]);
+    if (!current) return res.json({ versions: [] });
+
+    const history = await cardsDbAll("SELECT * FROM card_versions WHERE card_id = ? ORDER BY version DESC", [id]);
+
+    // 合并当前与历史版本，并在返回结构中增加 options 解析，方便前端覆盖式还原
+    const versions = [current, ...history].map(c => {
+      const isHistory = c.card_id !== undefined;
+      return {
+        id: isHistory ? `history_${c.id}` : c.id,
+        version: c.version,
+        version_label: c.version_label,
+        branch: c.branch || 'release',
+        status: c.status,
+        updated_at: c.updated_at || c.created_at,
+        event: c.event,
+        safety_type: c.safety_type,
+        safetyType: c.safety_type, // 前端使用驼峰结构映射
+        phase: c.phase,
+        options: JSON.parse(c.options_json) // 前端还原时需要这个完整数据
+      };
+    });
+
+    // 降序排列
+    versions.sort((a, b) => b.version - a.version);
+
+    res.json({ versions });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get("/api/admin/cards/:id/notes", authMiddleware, async (req, res) => {
+  try {
+    const card = await cardsDbGet("SELECT notes FROM cards WHERE id = ?", [req.params.id]);
+    if (!card) return res.status(404).json({ error: "卡牌不存在" });
+    const notes = card.notes ? JSON.parse(card.notes) : [];
+    res.json({ notes });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post("/api/admin/cards/:id/notes", authMiddleware, async (req, res) => {
+  const { content, selected_text } = req.body || {};
+  if (!content) return res.status(400).json({ error: "批注内容不能为空" });
+  try {
+    const card = await cardsDbGet("SELECT notes FROM cards WHERE id = ?", [req.params.id]);
+    if (!card) return res.status(404).json({ error: "卡牌不存在" });
+    const notes = card.notes ? JSON.parse(card.notes) : [];
+    const ts = Date.now();
+    notes.push({ id: ts, author: req.user.uid, author_name: req.user.username || null, content, selected_text: selected_text || null, completed: false, created_at: ts });
+    await cardsDbRun("UPDATE cards SET notes=? WHERE id=?", [JSON.stringify(notes), req.params.id]);
+    res.json({ ok: true, notes });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 编辑批注（修改内容 or 标记完成）
+app.put("/api/admin/cards/:id/notes/:noteId", authMiddleware, async (req, res) => {
+  const { content, completed } = req.body || {};
+  try {
+    const card = await cardsDbGet("SELECT notes FROM cards WHERE id = ?", [req.params.id]);
+    if (!card) return res.status(404).json({ error: "卡牌不存在" });
+    const notes = card.notes ? JSON.parse(card.notes) : [];
+    const nid = parseInt(req.params.noteId);
+    const idx = notes.findIndex(n => n.id === nid || n.created_at === nid);
+    if (idx === -1) return res.status(404).json({ error: "批注不存在" });
+    if (content !== undefined) notes[idx].content = content;
+    if (completed !== undefined) notes[idx].completed = completed;
+    await cardsDbRun("UPDATE cards SET notes=? WHERE id=?", [JSON.stringify(notes), req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 删除批注
+app.delete("/api/admin/cards/:id/notes/:noteId", authMiddleware, async (req, res) => {
+  try {
+    const card = await cardsDbGet("SELECT notes FROM cards WHERE id = ?", [req.params.id]);
+    if (!card) return res.status(404).json({ error: "卡牌不存在" });
+    const notes = card.notes ? JSON.parse(card.notes) : [];
+    const nid = parseInt(req.params.noteId);
+    const filtered = notes.filter(n => n.id !== nid && n.created_at !== nid);
+    if (filtered.length === notes.length) return res.status(404).json({ error: "批注不存在" });
+    await cardsDbRun("UPDATE cards SET notes=? WHERE id=?", [JSON.stringify(filtered), req.params.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 创建测试分支（复制 release → draft）
+app.post("/api/admin/cards/:id/branch", authMiddleware, async (req, res) => {
+  const { version_label } = req.body || {};
+  try {
+    const src = await cardsDbGet("SELECT * FROM cards WHERE id = ?", [req.params.id]);
+    if (!src) return res.status(404).json({ error: "卡牌不存在" });
+    const label = version_label || `v${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-测试版`;
+    const now = Date.now();
+    const result = await cardsDbRun(
+      `INSERT INTO cards(key, safety_type, event, phase, options_json, status, version, branch, parent_id, version_label, created_at, updated_at)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [src.key, src.safety_type, src.event, src.phase, src.options_json,
+        'pending', (src.version || 1), 'draft', src.id, label, now, now]
+    );
+    res.json({ ok: true, id: result.lastID, version_label: label });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 发布：draft → release（覆盖原版本内容）
+app.post("/api/admin/cards/:id/publish", authMiddleware, async (req, res) => {
+  const { version_label } = req.body || {};
+  try {
+    const draft = await cardsDbGet("SELECT * FROM cards WHERE id = ? AND branch = 'draft'", [req.params.id]);
+    if (!draft) return res.status(404).json({ error: "找不到测试版卡牌" });
+    const now = Date.now();
+    const label = version_label || `${new Date().getFullYear()}版`;
+    await cardsDbRun(
+      `UPDATE cards SET safety_type=?, event=?, phase=?, options_json=?, branch='release',
+       status='active', version=version+1, version_label=?, updated_at=? WHERE id=?`,
+      [draft.safety_type, draft.event, draft.phase, draft.options_json, label, now, draft.parent_id || draft.id]
+    );
+    // 将草稿标记为已合并（deleted）
+    await cardsDbRun("UPDATE cards SET status='deleted', deleted_at=? WHERE id=?", [now, draft.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

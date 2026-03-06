@@ -29,11 +29,19 @@ export async function initDb() {
   `);
 
   // 添加缺失的列（如果不存在）
-  try {
-    await dbRun(`ALTER TABLE users ADD COLUMN guardian_name TEXT`);
-  } catch (e) {
-    // 列已存在，忽略错误
+  const userCols = [
+    `ALTER TABLE users ADD COLUMN guardian_name TEXT`,
+    `ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'watcher'`,
+    `ALTER TABLE users ADD COLUMN enterprise_id INTEGER`,
+    `ALTER TABLE users ADD COLUMN watcher_level TEXT DEFAULT 'initial'`,
+  ];
+  for (const sql of userCols) {
+    try { await dbRun(sql); } catch (e) { /* 列已存在，忽略 */ }
   }
+
+  // 存量角色迁移：admin → boss，user → watcher
+  await dbRun(`UPDATE users SET role = 'boss' WHERE role = 'admin'`);
+  await dbRun(`UPDATE users SET role = 'watcher' WHERE role = 'user' OR role IS NULL`);
 
   // sms_codes 表（临时验证码）
   await dbRun(`
@@ -54,9 +62,26 @@ export async function initDb() {
       ended_at INTEGER,
       final_score INTEGER,
       payload_json TEXT,
+      location TEXT,
+      players_json TEXT,
+      game_mode TEXT,
+      game_settings_json TEXT,
+      status TEXT DEFAULT 'active',
       FOREIGN KEY(user_id) REFERENCES users(id)
     );
   `);
+
+  // 为已存在的旧表补全缺失列
+  const sessionCols = [
+    `ALTER TABLE game_sessions ADD COLUMN location TEXT`,
+    `ALTER TABLE game_sessions ADD COLUMN players_json TEXT`,
+    `ALTER TABLE game_sessions ADD COLUMN game_mode TEXT`,
+    `ALTER TABLE game_sessions ADD COLUMN game_settings_json TEXT`,
+    `ALTER TABLE game_sessions ADD COLUMN status TEXT DEFAULT 'active'`,
+  ];
+  for (const sql of sessionCols) {
+    try { await dbRun(sql); } catch (e) { /* 列已存在，忽略 */ }
+  }
 
   // game_events 表（游戏事件）
   await dbRun(`
@@ -80,9 +105,79 @@ export async function initDb() {
     )
   `);
 
+  // activities 表（活动场次）
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS activities (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      organizer TEXT,
+      activity_code TEXT UNIQUE,
+      started_at INTEGER,
+      ended_at INTEGER,
+      created_by INTEGER REFERENCES users(id),
+      status TEXT DEFAULT 'active',
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+    )
+  `);
+
+  // activity_sessions 关联表（活动 → 游戏桌）
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS activity_sessions (
+      activity_id INTEGER REFERENCES activities(id),
+      session_id INTEGER REFERENCES game_sessions(id),
+      table_no INTEGER,
+      PRIMARY KEY (activity_id, session_id)
+    )
+  `);
+
+  // watcher_level_applications 守望者等级申请
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS watcher_level_applications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
+      from_level TEXT,
+      to_level TEXT,
+      reason TEXT,
+      status TEXT DEFAULT 'pending',
+      reviewed_by INTEGER REFERENCES users(id),
+      reviewed_at INTEGER,
+      note TEXT,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+    )
+  `);
+
+  // watcher_level_logs 等级变更日志
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS watcher_level_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
+      old_level TEXT,
+      new_level TEXT,
+      source TEXT DEFAULT 'manual',
+      changed_by INTEGER REFERENCES users(id),
+      changed_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+      note TEXT
+    )
+  `);
+
+  // user_feedback 感想与反馈
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS user_feedback (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id),
+      type TEXT DEFAULT 'reflection',
+      content TEXT NOT NULL,
+      activity_id INTEGER,
+      session_id INTEGER,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+      reviewed INTEGER DEFAULT 0
+    )
+  `);
+
   // 预设默认配置 (Seed)
   const defaults = [
-    ["DEV_KEY", "sj0127wqt", "开发者登录密钥"],
+    ["DEV_KEY", "sj0127wqt", "开发者登录密钥（boss 级别）"],
+    ["operator_permissions", "{}", "各运营账号权限配置 {user_id: [modules]}"],
     ["DEFAULT_GAME_TIME", "5000", "游戏默认倒计时时长（秒）"],
     ["GAME_MODES", JSON.stringify([
       { id: 'standard', name: '标准版', desc: '体验 15 张卡牌', time: 5000, detail: '启蒙5 / 成长5 / 青春5', targetCards: 15, distribution: { '启蒙期': 5, '成长期': 5, '青春期': 5 } },

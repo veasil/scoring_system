@@ -14,3 +14,19 @@ venv/
 data/
 *.db-shm
 *.db-wal
+
+# Claude Code auto-memory
+.claude/
+
+# Diagnostic / one-off scripts
+admin-panel/inspect_db.py
+admin-panel/check_fields.py
+admin-panel/verify_fix.py
+verify_enc_node.js
+verify_enc_python.py
+check_staging.py
+
+# Planning docs
+implementation_plan.md
+to-do-list.md
+walkthrough.md

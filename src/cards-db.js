@@ -46,12 +46,35 @@ class SQLiteCardsSource extends ICardsSource {
       );
     `);
 
+        // 创建卡牌历史版本表
+        await this.run(`
+      CREATE TABLE IF NOT EXISTS card_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id INTEGER NOT NULL,
+        key INTEGER NOT NULL,
+        safety_type TEXT NOT NULL,
+        event TEXT NOT NULL,
+        phase TEXT,
+        options_json TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        version INTEGER DEFAULT 1,
+        version_label TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+      );
+    `);
+
         // 向后兼容：添加可能缺失的列
         const missingColumns = [
             { name: 'status', def: 'TEXT DEFAULT "pending"' },
             { name: 'version', def: 'INTEGER DEFAULT 1' },
             { name: 'updated_at', def: 'INTEGER' },
-            { name: 'deleted_at', def: 'INTEGER' }
+            { name: 'deleted_at', def: 'INTEGER' },
+            { name: 'branch', def: 'TEXT DEFAULT "release"' },
+            { name: 'online_id', def: 'TEXT' },
+            { name: 'parent_id', def: 'INTEGER' },
+            { name: 'notes', def: 'TEXT' },
+            { name: 'version_label', def: 'TEXT' },
+            { name: 'audio_url', def: 'TEXT' }
         ];
 
         for (const col of missingColumns) {
