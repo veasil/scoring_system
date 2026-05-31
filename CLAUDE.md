@@ -18,6 +18,7 @@
 |----|------|----------|
 | 后端 API | Node.js + Express (ESM) | `node server.js`（端口 8080）|
 | 管理后台 | Python 3.12 + Streamlit | `streamlit run admin-panel/app.py` |
+| 组织管理面板 | Vue 3 + Element Plus + Pinia | `cd enterprise-panel && npm run dev`（5173），生产走 `/enterprise/` |
 | 前端 | 原生 HTML/CSS/JS | Express 静态托管 `public/` |
 | 数据库 | SQLite × 2 | 自动初始化 |
 | 对象存储 | 阿里云 OSS（香港区）| ali-oss SDK |
@@ -31,14 +32,26 @@
 
 ```
 wqt-auth-backend/
-├── server.js              # 后端主入口，所有 API 路由
+├── server.js              # 后端主入口，大部分 API 路由（登录/账号资产已拆到 src/routes/）
 ├── src/
 │   ├── db.js              # 主库（wqt.db）初始化 + 工具函数
 │   ├── cards-db.js        # 卡牌库（cards.db），工厂模式，支持 SQLite/飞书切换
-│   └── bmob.js            # Bmob 短信服务封装
+│   ├── bmob.js            # Bmob 短信服务封装
+│   ├── config.js          # 运行期配置 + AES 加解密（config / decryptVal / loadConfig）
+│   ├── paths.js           # ROOT_DIR 等路径常量
+│   ├── account.js         # 账号有效期/会员资产核心逻辑（组织统一到期判定）
+│   ├── middleware/        # auth.js（JWT 校验）、rbac.js（角色/组织权限）
+│   ├── services/          # sessions.js（单设备会话）、sms.js（短信验证码）
+│   └── routes/            # auth.routes.js（认证）、account-admin.routes.js（账号资产）
 ├── admin-panel/
-│   ├── app.py             # Streamlit 管理后台（2100+ 行）
+│   ├── app.py             # Streamlit 管理后台（含组织管理页面）
 │   └── db_utils.py        # 直连 wqt.db 的查询工具，含 AES 解密
+├── enterprise-panel/      # 组织管理员 Vue 3 SPA
+│   ├── vite.config.js     # base: '/enterprise/', proxy→8080
+│   ├── src/views/         # Dashboard/Members/Activities/Sessions/InviteCodes/Settings
+│   ├── src/api/           # Axios 封装（auth/members/dashboard/activities/sessions/invite-codes）
+│   ├── src/stores/auth.js # Pinia 认证状态
+│   └── src/components/AppLayout.vue  # 侧栏+顶栏布局
 ├── public/                # 前端静态文件（Express 托管）
 │   ├── index.html         # 主页（桌游模式 + 监督模式）
 │   ├── complete-profile.html  # 新用户填守望师名页
@@ -61,8 +74,20 @@ wqt-auth-backend/
 ### wqt.db（主库）
 ```
 users            id, username, phone, wechat_openid, unionid,
-                 password_hash, guardian_name, is_profile_complete,
-                 created_at, role('admin'|'user')
+                 password_hash, guardian_name, real_name,
+                 is_profile_complete, enterprise_id(FK→organizations.id),
+                 created_at, role('boss'|'operator'|'watcher'|'enterprise'),
+                 valid_until(毫秒时间戳, 仅独立个人用户用; NULL=永久)
+
+organizations    id, name, owner_user_id(FK→users.id), max_members,
+                 description, status('active'|'suspended'),
+                 created_at, updated_at,
+                 valid_until(毫秒时间戳, 组织统一到期; NULL=永久)
+
+invite_codes     id, code(UNIQUE), type('general'|'organization'),
+                 organization_id(nullable FK→organizations.id),
+                 created_by(FK→users.id), max_uses, used_count,
+                 expires_at, status('active'), created_at
 
 game_sessions    id, user_id, started_at, ended_at, final_score,
                  payload_json, location, players_json, game_mode,
@@ -71,17 +96,49 @@ game_sessions    id, user_id, started_at, ended_at, final_score,
 game_events      id, session_id, ts, type, payload
                  [type 枚举见下方"关键约定"]
 
+activities       ..., enterprise_id(nullable FK→organizations.id)
+
 system_settings  key, value(AES加密), description, updated_at
+                 [含 ALLOW_SELF_REGISTRATION 开关，默认 false]
 sms_codes        phone, code_hash, expires_at, created_at
+
+user_sessions    id, user_id, jti(UNIQUE), device_info, ip,
+                 created_at, last_seen_at
+                 [单设备登录：每用户仅保留一条有效会话，新登录覆盖旧的]
 ```
 
-### cards.db（卡牌库）
+### cards.db（卡牌库 — 三表架构）
 ```
-cards   id, key(唯一业务ID), safety_type, event, phase,
-        options_json, status('pending'|'active'|'rejected'|'deleted'),
-        version(整数), created_at, updated_at, deleted_at
+cards (沙盒/详情表，admin panel 读写)
+  id, key(UNIQUE), safety_type, event, phase, options_json,
+  audio_url, status('pending'|'active'|'deleted'),
+  current_version_id(FK→card_versions.id), notes(JSON), author_id,
+  created_at, updated_at, deleted_at
+
+card_versions (版本库，append-only)
+  id, card_id(FK→cards.id), key, safety_type, event, phase,
+  options_json, audio_url, version, version_label, note,
+  branch(默认'main'), parent_id(FK→card_versions.id),
+  author_id, promoted_at, created_at
+
+cards_released (游戏发布快照，append-only，前端读取)
+  id, card_id(FK→cards.id), key, safety_type, event, phase,
+  options_json, audio_url, version_label,
+  from_version_id(FK→card_versions.id),
+  released_by, released_at
 ```
 `options_json` 结构：`{"A":{"text":"...","consequence":"...","attributeEffects":{"安全力":1,...}},...}`
+
+**三表流程**：`card_versions` →promote→ `cards` →release→ `cards_released` → 前端游戏
+
+```
+card_groups (卡牌组/版本套装，绑定 cards_released 快照)
+  id, name, description, released_ids_json(有序JSON数组),
+  is_default(0/1，全表唯一), created_by, created_at, updated_at
+```
+游戏前端通过 `GET /api/cards?group_id=X` 拉取指定组的有序卡牌；未指定时使用 `is_default=1` 的组；若无任何组则回退到"每个 key 最新快照"的旧行为。
+
+**发布即加入卡牌组**：admin 创建/编辑卡牌组时直接选 `cards`（active）→ 保存时后端自动 snapshot 到 `cards_released` 并把新 released_id 写入 `released_ids_json`。复用规则：若该 card 的 `current_version_id` 已有对应快照则直接复用，避免重复落行。**已废弃**：bulk-release UI 入口（端点保留以防外部调用）。
 
 ---
 
@@ -91,30 +148,50 @@ cards   id, key(唯一业务ID), safety_type, event, phase,
 |--------|------|------|
 | 🎛️ 驾驶舱 | `overview_page()` | 核心指标概览 |
 | 👤 用户管理 | `user_management_page()` | 用户列表、角色设置、OSS关联 |
+| 🏢 组织管理 | `org_management_page()` | 组织CRUD、邀请码、批量建号（boss专属）|
 | 🎴 卡牌管理 | `card_management_page()` | 卡牌增删改、状态流转 |
+| 📅 活动管理 | `activity_management_page()` | 活动创建/编辑/归档、场次查看 |
 | 📂 OSS 文件管理 | `oss_management_page()` | 阿里云 OSS 文件浏览/删除 |
 | 🎮 游戏分析 | `game_analysis_page()` | 场次统计、卡牌分析 |
 | 🧹 数据审计 | `data_audit_page()` | 逐场次审查 |
 | 🔬 复盘测试 | `review_testing_page()` | LLM 复盘报告生成测试 |
 | ⚙️ 系统设置 | `system_settings_page()` | 系统配置（AES加密存储）|
 
-**登录**：`admin` 账号用 DEV_KEY；普通用户用手机号 + 密码，role=admin 才进入后台。
+**登录**：`admin`/`boss` 账号用 DEV_KEY；普通用户用手机号 + 密码，role=boss/operator 才进入后台。
 **数据访问**：admin-panel 直连 `wqt.db`（`db_utils.py`），同时调用 `BACKEND_URL` 的 REST API 操作卡牌。
 
 ---
 
-## 关键 API 端点（server.js）
+## 关键 API 端点（登录相关已移至 src/routes/auth.routes.js）
 
 ```
-认证：POST /api/auth/sms/send|verify  POST /api/auth/login|register|logout
-用户：GET  /api/me   POST /api/auth/complete-profile
+认证：POST /api/auth/login（手机号+密码+验证码 三要素 + 单设备会话轮换）
+      POST /api/auth/sms/send（发码）  POST /api/auth/sms/verify（仅预校验，不签发 token）
+      POST /api/auth/dev-login|admin-login|logout|register（默认关闭）
+      POST /api/auth/register-with-invite（邀请码注册）
+      ⚠️ /api/auth/wechat/* 已删除（无微信通道）
+账号资产（boss, src/routes/account-admin.routes.js）：
+      PUT /api/admin/organizations/:id/validity   PUT /api/admin/users/:id/validity
+      GET/DELETE /api/admin/users/:id/sessions（查看在线设备 / 强制下线）
+用户：GET  /api/me   PUT /api/me/password   POST /api/auth/complete-profile
 游戏：POST /api/game/start|finish|event   GET /api/game/last-session|session/:id
-卡牌：GET  /api/cards（公开）  GET/POST /api/admin/cards（需auth）
-      PUT  /api/cards/:id      DELETE /api/cards/:id
-      POST /api/admin/generate-card（LLM生成）
-OSS： GET  /api/admin/oss/files   DELETE /api/admin/oss/files
+卡牌（公开）：GET /api/cards[?group_id=:id]（默认走 is_default 卡牌组，无组回退最新快照）
+卡牌组（公开）：GET /api/card-groups
+卡牌组（admin）：GET/POST /api/admin/card-groups   GET/PUT/DELETE /api/admin/card-groups/:id
+卡牌（admin）：GET/POST /api/admin/cards   PUT/DELETE /api/cards/:id
+版本：POST /api/admin/cards/:id/branch   PUT /api/admin/card-versions/:id   GET /api/admin/cards/:id/versions
+推送：POST /api/admin/card-versions/:id/promote
+发布：POST /api/admin/cards/:id/release   POST /api/admin/cards/bulk-release
+批注：GET/POST /api/admin/cards/:id/notes
+组织（boss）：POST/GET/PUT/DELETE /api/admin/organizations   POST /api/admin/organizations/:id/members
+邀请码（boss）：POST/GET /api/admin/invite-codes
+组织管理员：GET /api/enterprise/info|dashboard|sessions|members|activities|invite-codes
+           POST /api/enterprise/members|activities|invite-codes
+           PUT/DELETE /api/enterprise/members/:id   PUT /api/enterprise/activities/:id
+           GET /api/enterprise/members/:id/stats   GET /api/enterprise/activities/:id/sessions
+OSS：GET  /api/admin/oss/files   DELETE /api/admin/oss/files
 上传：POST /api/upload/audio|report
-LLM： POST /api/llm/story
+LLM：POST /api/llm/story   POST /api/admin/generate-card
 设置：GET  /api/settings
 ```
 
@@ -133,8 +210,14 @@ LLM： POST /api/llm/story
 
 > 新增事件类型时同步更新此表，并检查 `admin-panel/app.py` 所有 SQL 查询。
 
-### 卡牌生命周期状态
-`cards.status` 合法值：`pending` → `active` / `rejected` / `deleted`
+### 卡牌三表生命周期
+```
+新建 → cards(pending) + card_versions(v1)
+编辑 → card_versions 插入新行
+推送 → card_versions →promote→ cards(active)
+发布 → cards →release→ cards_released（前端可见）
+```
+`cards.status` 合法值：`pending` / `active` / `deleted`
 
 ### 双数据库路径
 
@@ -154,15 +237,31 @@ admin-panel 显示时统一转北京时间（UTC+8，`BEIJING_TZ`）。
 
 ---
 
-## 当前迭代计划（Task 1-6）
+## 组织号体系（已实现）
 
-详见 `implementation_plan.md`。优先级：**Task 4（权限重构）> Task 1（卡牌升级）> Task 3（活动管理）> Task 2（OSS视图）> Task 5（前端"我的"）> Task 6（运营手册）**
+### 角色模型
+- `role='boss'` → 超级管理员，全权限
+- `role='operator'` → 运营，模块级权限（`system_settings.operator_permissions`）
+- `role='enterprise'` + `enterprise_id=X` → 组织 X 的管理员
+- `role='watcher'` + `enterprise_id=X` → 组织 X 的成员
+- `role='watcher'` + `enterprise_id=NULL` → 独立个人用户
 
-核心变更预告：
-- `users.role` 将扩展为 `boss/operator/watcher/enterprise`（含子账号 `enterprise_id` 字段）
-- 守望者等级 `watcher_level` 字段新增，需线上申请+人工审批流程
-- 卡牌新增版本分支（release/draft）、批注功能
-- 新增 `activities`、`activity_sessions`、`watcher_level_applications` 等表
+### 账号创建路径
+1. **Boss 直接创建**：Streamlit 后台或 API 创建组织 + 管理员 + 成员
+2. **邀请码注册**：Boss/组织管理员生成邀请码 → 用户通过 `/api/auth/register-with-invite` 自注册
+   - 邀请码类型：`general`（通用）或 `organization`（绑定组织，注册后自动加入）
+3. **自助注册已关闭**：`ALLOW_SELF_REGISTRATION=false`，验证码登录不再自动建号
+
+### 数据隔离
+- 组织管理员只能访问 `enterprise_id = 自己组织ID` 的用户和活动数据
+- `requireEnterprise` 中间件统一校验
+- JWT payload 含 `enterpriseId` 字段
+
+### 组织管理面板（enterprise-panel）
+- 路径：`/enterprise/`（Express 托管 `enterprise-panel/dist/`）
+- 开发：`cd enterprise-panel && npm run dev`（Vite proxy → 8080）
+- 构建：`cd enterprise-panel && npx vite build`
+- 页面：Dashboard / Members / Activities / Sessions / InviteCodes / Settings
 
 ---
 
@@ -185,3 +284,30 @@ admin-panel 显示时统一转北京时间（UTC+8，`BEIJING_TZ`）。
 **根因**: `js/starfield.js` 没有区分"首次加载"和"从其他页面跳转回来"两种场景。
 **修复**: 在 `complete-profile.html` 提交成功后跳转前写入 `sessionStorage.setItem('skip_intro', 'true')`；`starfield.js` 初始化时检测该标记，存在则直接隐藏 `#welcome-screen` 并清除标记。
 **关键点**: 页面间传递"一次性状态"用 `sessionStorage`（关闭 Tab 即清除），不要用 `localStorage`。
+
+---
+
+### 🔧 [2026-05-31] 多标签页复盘串号
+
+**现象**: 开新标签页打一局后，切回原标签页点"复盘"，输出的却是新标签页那局的数据。
+**根因**: `game-review.js` 把会话 ID 存在 `localStorage`（同源全标签页共享），新标签页 `setSessionId` 覆盖了 `WQT_SESSION_ID`，原标签页 `getSessionId` 读到的就是别人的对局。
+**修复**: 将 `getSessionId/setSessionId` 改用 `sessionStorage`（按标签页隔离）；token 仍留 `localStorage`（`game-review.js:13-24`）。
+**关键点**: 凡是"每个标签页一份"的运行态（会话 ID、进行中对局）必须用 `sessionStorage`，不能用 `localStorage`；只有跨标签共享的东西（登录 token）才放 `localStorage`。
+
+---
+
+### 🔧 [2026-05-31] 通关后无反馈/继续计分
+
+**现象**: 最后一张卡选完只弹"恭喜通关"看不到该卡反馈；通关后继续选牌仍在加分、进操作历史、回传后端。
+**根因**: `submit-choice` 通关分支只写 `progress-display` 不写 `choice-display`；且无"对局结束"标志，结束后照跑完整计分逻辑。
+**修复**: 通关分支补渲染 `choice-display` 反馈；新增 `gameEnded` 标志（`finalizeSession` 置 true，开局/恢复置 false），结束后 `submit-choice`/技能进入自由体验分支：只出反馈、不计分、不记历史、不回传（`index.html:1097/1221/1712`）。
+**关键点**: "游戏结束"是一个独立状态，要用显式标志统一拦截后续所有写操作（计分、历史、`recordEvent`、`saveGameState`），不能只靠 `hasFinishedSession` 防重复结算。
+
+---
+
+### 🔧 [2026-05-31] 起始阶段硬编码启蒙期
+
+**现象**: 模式分布若先排青春期，开局仍显示并从"启蒙期"算起，阶段进度/回退错位。
+**根因**: `startGameWithConfig` 把 `currentPhase` 写死为 `'启蒙期'`，`resetAttributes` 也硬编码 启蒙期/成长期/青春期 三阶段阈值。
+**修复**: 起始阶段改取 `cardsPerPhase` 中第一个数量>0 的阶段；`resetAttributes` 按 `cardsPerPhase` 配置顺序累计阈值回退（`index.html:2119`、`2200-2212`）。
+**关键点**: 阶段顺序/数量一律以本局 `cardsPerPhase`（模式分布）为准遍历，不要在逻辑里写死阶段名；`checkPhaseCompletion` 已是配置驱动可参考。

@@ -78,6 +78,8 @@ export async function initDb() {
     `ALTER TABLE game_sessions ADD COLUMN game_mode TEXT`,
     `ALTER TABLE game_sessions ADD COLUMN game_settings_json TEXT`,
     `ALTER TABLE game_sessions ADD COLUMN status TEXT DEFAULT 'active'`,
+    `ALTER TABLE game_sessions ADD COLUMN score_details_json TEXT`,
+    `ALTER TABLE game_sessions ADD COLUMN card_group_id INTEGER`,
   ];
   for (const sql of sessionCols) {
     try { await dbRun(sql); } catch (e) { /* 列已存在，忽略 */ }
@@ -160,6 +162,47 @@ export async function initDb() {
     )
   `);
 
+  // organizations 组织表
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS organizations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      owner_user_id INTEGER NOT NULL REFERENCES users(id),
+      max_members INTEGER NOT NULL DEFAULT 50,
+      description TEXT,
+      status TEXT DEFAULT 'active',
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+      updated_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+    )
+  `);
+
+  // invite_codes 邀请码表
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS invite_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      type TEXT DEFAULT 'general',
+      organization_id INTEGER,
+      created_by INTEGER NOT NULL REFERENCES users(id),
+      max_uses INTEGER DEFAULT 1,
+      used_count INTEGER DEFAULT 0,
+      expires_at INTEGER NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+    )
+  `);
+
+  // users 补全 real_name 列
+  try { await dbRun(`ALTER TABLE users ADD COLUMN real_name TEXT`); } catch (e) { /* 已存在 */ }
+
+  // activities 补全 enterprise_id 列
+  const activityCols = [
+    `ALTER TABLE activities ADD COLUMN enterprise_id INTEGER`,
+  ];
+  for (const sql of activityCols) {
+    try { await dbRun(sql); } catch (e) { /* 列已存在，忽略 */ }
+  }
+
   // user_feedback 感想与反馈
   await dbRun(`
     CREATE TABLE IF NOT EXISTS user_feedback (
@@ -173,6 +216,29 @@ export async function initDb() {
       reviewed INTEGER DEFAULT 0
     )
   `);
+
+  // 账号资产管理：会员有效期（组织统一到期）
+  const accountAssetCols = [
+    `ALTER TABLE users ADD COLUMN valid_until INTEGER`,         // 个人独立用户到期（毫秒时间戳，NULL=不限期）
+    `ALTER TABLE organizations ADD COLUMN valid_until INTEGER`, // 组织统一到期（成员跟随组织）
+  ];
+  for (const sql of accountAssetCols) {
+    try { await dbRun(sql); } catch (e) { /* 列已存在，忽略 */ }
+  }
+
+  // user_sessions 单设备会话表：每个用户保留一条有效会话，新登录覆盖旧的（踢掉旧设备）
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      jti TEXT NOT NULL UNIQUE,
+      device_info TEXT,
+      ip TEXT,
+      created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+      last_seen_at INTEGER
+    )
+  `);
+  await dbRun(`CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)`);
 
   // 预设默认配置 (Seed)
   const defaults = [
@@ -193,7 +259,9 @@ export async function initDb() {
       title: "《AI在5000天·伍力全开》伍力值计分系统",
       copyright: "© 2026 上海伍仟天数字科技有限公司 | 保留所有权利",
       welcome_title: "欢迎来到AI 5000天<br>伍力全开的世界！"
-    }), "站点品牌与文本信息"]
+    }), "站点品牌与文本信息"],
+    ["REVIEW_MIN_CARDS", "7", "复盘报告最低卡牌数量（低于此数不生成报告）"],
+    ["ALLOW_SELF_REGISTRATION", "false", "是否允许验证码自助注册新用户（true/false）"]
   ];
   for (const [key, val, desc] of defaults) {
     const exists = await dbGet("SELECT 1 FROM system_settings WHERE key = ?", [key]);
