@@ -15,6 +15,28 @@
     <link rel="stylesheet" href="css/animations.css">
     <link rel="stylesheet" href="css/welcome.css">
     <link rel="stylesheet" href="css/supervisor.css">
+    <style>
+        .hamburger-btn{position:absolute;left:16px;top:16px;width:40px;height:40px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);border-radius:8px;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px;cursor:pointer;z-index:50;padding:0;transition:background .2s}
+        .hamburger-btn:hover{background:rgba(255,255,255,.2)}
+        .hamburger-btn span{display:block;width:20px;height:2px;background:#fff;border-radius:2px}
+        .cg-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:998}
+        .cg-overlay.hidden{display:none}
+        .cg-drawer{position:fixed;left:0;top:0;bottom:0;width:300px;max-width:80vw;background:#1a1d2e;color:#fff;box-shadow:4px 0 20px rgba(0,0,0,.5);z-index:999;display:flex;flex-direction:column;transform:translateX(0);transition:transform .25s}
+        .cg-drawer.hidden{transform:translateX(-100%);pointer-events:none}
+        .cg-drawer-head{display:flex;align-items:center;justify-content:space-between;padding:20px;border-bottom:1px solid rgba(255,255,255,.1)}
+        .cg-drawer-head h3{margin:0;font-size:18px}
+        .cg-close{background:none;border:none;color:#fff;font-size:28px;cursor:pointer;line-height:1;padding:0 8px}
+        .cg-list{list-style:none;margin:0;padding:12px;overflow-y:auto;flex:1}
+        .cg-item{padding:14px 16px;margin-bottom:8px;background:rgba(255,255,255,.05);border-radius:8px;cursor:pointer;border:1px solid transparent;transition:all .15s}
+        .cg-item:hover{background:rgba(255,255,255,.12)}
+        .cg-item.active{border-color:#4a9eff;background:rgba(74,158,255,.15)}
+        .cg-name{font-weight:600;font-size:15px;margin-bottom:4px}
+        .cg-meta{font-size:12px;opacity:.65}
+        .cg-tag{display:inline-block;font-size:10px;padding:2px 6px;background:#4a9eff;border-radius:4px;margin-left:6px;vertical-align:middle}
+        .cg-empty{padding:20px;text-align:center;opacity:.6;font-size:14px}
+        .game-header{position:relative}
+        .game-header h1{padding-left:56px}
+    </style>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -36,6 +58,9 @@
 
     <div id="app">
         <header class="game-header">
+            <button id="card-group-menu-btn" class="hamburger-btn" aria-label="选择卡牌组" title="选择卡牌组">
+                <span></span><span></span><span></span>
+            </button>
             <h1>《AI在5000天·伍力全开》伍力值计分系统</h1>
             <div class="game-controls">
                 <div class="mode-selector">
@@ -63,12 +88,22 @@
                     </button>
                     <div id="user-badge" class="user-badge hidden">
                         <span id="user-name"></span>
+                        <a href="/my.html" id="my-page-link" class="auth-btn secondary" style="text-decoration:none;">个人中心</a>
                         <button id="logout-btn" class="auth-btn secondary">退出</button>
                     </div>
                 </div>
 
             </div>
         </header>
+
+        <div id="card-group-overlay" class="cg-overlay hidden"></div>
+        <aside id="card-group-drawer" class="cg-drawer hidden">
+            <div class="cg-drawer-head">
+                <h3>选择卡牌组</h3>
+                <button id="cg-close-btn" class="cg-close" aria-label="关闭">×</button>
+            </div>
+            <ul id="card-group-list" class="cg-list"><li class="cg-empty">加载中…</li></ul>
+        </aside>
 
         <main class="game-content">
             <!-- 桌游模式界面 -->
@@ -184,39 +219,31 @@
 
                 <div class="auth-tabs">
                     <button class="auth-tab active" id="tab-direct">账号登录</button>
-                    <button class="auth-tab" id="tab-wechat">微信登录</button>
                     <button class="auth-tab" id="tab-dev"
                         style="background: #f0f0f0; font-size: 12px; padding: 6px 8px;">开发者</button>
                 </div>
 
-                <!-- 账号登录 -->
+                <!-- 三要素登录：手机号 + 密码 + 验证码（单设备） -->
                 <div id="panel-direct">
                     <form id="login-form" class="auth-form">
                         <input id="login-phone" autocomplete="tel" placeholder="手机号" required />
+                        <input id="login-password" type="password" autocomplete="current-password" placeholder="密码" required />
                         <div style="display:flex; gap:10px;">
-                            <input id="login-code" placeholder="验证码" style="flex:1;" required />
+                            <input id="login-code" inputmode="numeric" autocomplete="one-time-code" placeholder="验证码" style="flex:1;" required />
                             <button type="button" id="sms-send-btn" class="auth-btn secondary"
                                 style="white-space:nowrap;">获取验证码</button>
                         </div>
                         <div class="auth-actions">
-                            <button type="submit" class="auth-btn" style="flex:1;">验证并登录</button>
+                            <button type="submit" class="auth-btn" id="login-submit-btn" style="flex:1;">登录</button>
                         </div>
-                        <div id="sms-status" class="auth-hint">点击「获取验证码」后手机会收到六位验证码。</div>
+                        <div id="sms-status" class="auth-hint">需同时填写手机号、密码和验证码。点击「获取验证码」后手机会收到六位验证码。</div>
                     </form>
-                </div>
-
-                <!-- 微信扫码登录（需要你配置微信开放平台参数） -->
-                <div id="panel-wechat" class="hidden">
-                    <div class="qr-box">
-                        <div class="qr-img" id="qr-img"><span style="opacity:.6;">二维码</span></div>
-                        <div style="flex:1;">
-                            <button id="wechat-qr-btn" class="auth-btn" style="width:100%;">获取微信登录二维码</button>
-                            <div class="auth-hint" style="margin-top:10px;">
-                                若在微信内打开网页：通常更建议用「微信公众平台网页授权」或直接做成小程序登录。<br />
-                                若在电脑浏览器：可用「微信开放平台网站应用扫码登录」。
-                            </div>
-                            <div id="wechat-status" class="auth-hint" style="margin-top:10px;"></div>
-                        </div>
+                    <div style="margin-top: 12px; text-align: center; border-top: 1px solid rgba(255,255,255,0.15); padding-top: 12px;">
+                        <span style="color: rgba(255,255,255,0.6); font-size: 13px;">还没有账号？</span>
+                        <a href="/register.html" target="_blank"
+                           style="color: #4a9eff; font-size: 13px; text-decoration: none; font-weight: 500; margin-left: 4px;">
+                           注册新账号
+                        </a>
                     </div>
                 </div>
 
@@ -252,6 +279,18 @@
                     <p class="auth-hint">请录入本场游戏的基础信息，以便生成分析报告。</p>
 
                     <div class="auth-form" style="margin-top: 15px;">
+                        <div class="input-group">
+                            <label><strong>🎫 活动码</strong> <span style="font-size:12px;color:rgba(255,255,255,0.5);">(选填，有活动码可自动填充地点)</span></label>
+                            <div style="display:flex;gap:8px;">
+                                <input id="setup-activity-code" placeholder="例如：ACT-001" style="flex:1;" />
+                                <button id="setup-activity-lookup" class="auth-btn" style="padding:8px 16px;font-size:13px;">查询</button>
+                            </div>
+                            <div id="setup-activity-info" style="font-size:12px;color:#4caf50;margin-top:4px;display:none;"></div>
+                            <div style="margin-top:6px;font-size:12px;">
+                                <a href="/activity.html?tab=create" id="setup-create-activity-toggle" style="color:#90caf9;">没有活动码？点此创建新活动</a>
+                            </div>
+                        </div>
+
                         <div class="input-group">
                             <label><strong>📍 游戏地点</strong></label>
                             <input id="setup-location" placeholder="例如：XX社区活动中心、家里..." />
@@ -420,21 +459,80 @@
     <script src="game-review.js"></script>
     <script src="advanced-review.js"></script>
     <script>
+        function renderCardGroupDrawer() {
+            const list = document.getElementById('card-group-list');
+            const btn = document.getElementById('card-group-menu-btn');
+            const drawer = document.getElementById('card-group-drawer');
+            const overlay = document.getElementById('card-group-overlay');
+            const closeBtn = document.getElementById('cg-close-btn');
+            if (!list || !btn || !drawer || !overlay) return;
+
+            const groups = window.CARD_GROUPS || [];
+            const currentId = window.CURRENT_CARD_GROUP ? window.CURRENT_CARD_GROUP.id : null;
+
+            if (!groups.length) {
+                list.innerHTML = '<li class="cg-empty">暂无卡牌组（使用全部已发布卡牌）</li>';
+            } else {
+                list.innerHTML = groups.map(g => {
+                    const active = (String(g.id) === String(currentId)) ? ' active' : '';
+                    const def = g.is_default ? ' <span class="cg-tag">默认</span>' : '';
+                    return `<li class="cg-item${active}" data-id="${g.id}">
+                        <div class="cg-name">${g.name}${def}</div>
+                        <div class="cg-meta">${g.count} 张${g.description ? ' · ' + g.description : ''}</div>
+                    </li>`;
+                }).join('');
+                list.querySelectorAll('.cg-item').forEach(li => {
+                    li.addEventListener('click', async () => {
+                        const newId = li.getAttribute('data-id');
+                        if (String(newId) === String(currentId)) { closeDrawer(); return; }
+                        const inGame = window.globalState && window.globalState.gameStarted;
+                        if (inGame && !confirm('切换卡牌组将重置当前游戏，确定切换吗？')) return;
+                        sessionStorage.setItem('current_card_group_id', newId);
+                        location.reload();
+                    });
+                });
+            }
+
+            const openDrawer = () => { drawer.classList.remove('hidden'); overlay.classList.remove('hidden'); };
+            const closeDrawer = () => { drawer.classList.add('hidden'); overlay.classList.add('hidden'); };
+            btn.onclick = openDrawer;
+            overlay.onclick = closeDrawer;
+            if (closeBtn) closeBtn.onclick = closeDrawer;
+        }
+
         window.addEventListener('load', async () => {
             // Fetch cards data and settings
             try {
                 // 加载系统配置
                 await loadSystemSettings();
 
-                const res = await fetch('api/cards');
+                // 卡牌组：sessionStorage 优先，否则后端默认组
+                window.CARD_GROUPS = [];
+                try {
+                    const gRes = await fetch('api/card-groups');
+                    if (gRes.ok) {
+                        window.CARD_GROUPS = (await gRes.json()).groups || [];
+                    }
+                } catch (_) {}
+
+                let storedGid = sessionStorage.getItem('current_card_group_id');
+                if (storedGid && !window.CARD_GROUPS.find(g => String(g.id) === String(storedGid))) {
+                    storedGid = null;
+                    sessionStorage.removeItem('current_card_group_id');
+                }
+                const cardsUrl = storedGid ? ('api/cards?group_id=' + encodeURIComponent(storedGid)) : 'api/cards';
+                const res = await fetch(cardsUrl);
                 if (res.ok) {
                     const data = await res.json();
                     window.CARD_DATA = data.cards;
-                    console.log('Loaded cards from API:', window.CARD_DATA.length);
+                    window.CURRENT_CARD_GROUP = data.group || null;
+                    if (data.group) sessionStorage.setItem('current_card_group_id', String(data.group.id));
+                    console.log('Loaded cards from API:', window.CARD_DATA.length, 'group:', data.group);
                 } else {
                     console.error('Failed to load cards data:', res.status);
                     document.getElementById('progress-display').innerHTML = '<p>卡牌数据加载失败，请刷新重试</p>';
                 }
+                renderCardGroupDrawer();
             } catch (e) {
                 console.error('Error loading cards data', e);
                 document.getElementById('progress-display').innerHTML = '<p>网络错误，卡牌数据加载失败</p>';
@@ -630,6 +728,9 @@
                     const me = await api('api/me');
                     authState.user = me.user;
                     saveEnvMarkers(); // 每次验证成功都保存环境标记，确保 my.html 返回时用对路径
+                    if (window.CARD_DATA && window.CARD_DATA.length > 0) {
+                        loadGameState(); // 尝试恢复未完成的游戏进度
+                    }
                     setAuthUI(true);
                 } catch (e) {
                     // 仅在明确 token 无效时清除（401），网络错误等不清除
@@ -640,11 +741,13 @@
                         localStorage.removeItem('WQT_AUTH_TOKEN');
                         localStorage.removeItem('WQT_USER_CACHE');
                     }
-                    if (window.GameReview && window.GameReview.setSessionId) {
-                        window.GameReview.setSessionId(null);
+                    if (isAuthError) {
+                        if (window.GameReview && window.GameReview.setSessionId) {
+                            window.GameReview.setSessionId(null);
+                        }
+                        activeSessionId = null;
+                        hasFinishedSession = false;
                     }
-                    activeSessionId = null;
-                    hasFinishedSession = false;
                     setAuthUI(false);
                 }
             }
@@ -660,44 +763,41 @@
                 authState.token = null;
                 authState.user = null;
                 localStorage.removeItem('WQT_AUTH_TOKEN');
+                localStorage.removeItem('WQT_USER_CACHE');
+                clearGameState();
                 setAuthUI(false);
                 alert('已退出登录');
             };
 
-            // 登录 tab 切换
+            // 登录 tab 切换（账号登录 / 开发者）
             const tabDirect = document.getElementById('tab-direct');
-            const tabWechat = document.getElementById('tab-wechat');
             const tabDev = document.getElementById('tab-dev');
             const panelDirect = document.getElementById('panel-direct');
-            const panelWechat = document.getElementById('panel-wechat');
             const panelDev = document.getElementById('panel-dev');
 
             const loginForm = document.getElementById('login-form');
             const phoneInput = document.getElementById('login-phone');
+            const passwordInput = document.getElementById('login-password');
             const codeInput = document.getElementById('login-code');
             const smsSendBtn = document.getElementById('sms-send-btn');
             const smsStatus = document.getElementById('sms-status');
+            const loginSubmitBtn = document.getElementById('login-submit-btn');
             let smsCountdownTimer = null;
             let smsCountdownLeft = 0;
 
             function activateTab(which) {
-                // 重置所有标签页
-                [tabDirect, tabWechat, tabDev].forEach(tab => tab.classList.remove('active'));
-                [panelDirect, panelWechat, panelDev].forEach(panel => panel.classList.add('hidden'));
+                [tabDirect, tabDev].forEach(tab => tab.classList.remove('active'));
+                [panelDirect, panelDev].forEach(panel => panel.classList.add('hidden'));
 
-                if (which === 'direct') {
-                    tabDirect.classList.add('active');
-                    panelDirect.classList.remove('hidden');
-                } else if (which === 'wechat') {
-                    tabWechat.classList.add('active');
-                    panelWechat.classList.remove('hidden');
-                } else if (which === 'dev') {
+                if (which === 'dev') {
                     tabDev.classList.add('active');
                     panelDev.classList.remove('hidden');
+                } else {
+                    tabDirect.classList.add('active');
+                    panelDirect.classList.remove('hidden');
                 }
             }
             tabDirect.onclick = () => activateTab('direct');
-            tabWechat.onclick = () => activateTab('wechat');
             tabDev.onclick = () => activateTab('dev');
 
             function updateSmsCountdownUI() {
@@ -741,21 +841,25 @@
                 }
             };
 
+            // 三要素登录：手机号 + 密码 + 验证码（单设备，新登录踢旧设备）
             loginForm.onsubmit = async (e) => {
                 e.preventDefault();
                 const phone = phoneInput.value.trim();
+                const password = passwordInput.value;
                 const code = codeInput.value.trim();
-                if (!phone || !code) { alert('请输入手机号和验证码'); return; }
+                if (!phone || !password || !code) { alert('请填写手机号、密码和验证码'); return; }
+
+                loginSubmitBtn.disabled = true;
+                loginSubmitBtn.textContent = '登录中...';
+
                 try {
-                    const ret = await api('api/auth/sms/verify', { method: 'POST', body: { phone, code } });
+                    const ret = await api('api/auth/login', { method: 'POST', body: { phone, password, code } });
                     authState.token = ret.token;
                     authState.user = ret.user;
                     localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
                     saveEnvMarkers();
 
-                    // 检查是否为新用户
-                    if (ret.user.isNewUser) {
-                        // 新用户需要完善资料
+                    if (!ret.user.isProfileComplete) {
                         closeAuthModal();
                         window.location.href = '/complete-profile.html';
                         return;
@@ -766,6 +870,9 @@
                     alert(`欢迎回来，${ret.user.guardianName || '守望师'}!`);
                 } catch (err) {
                     alert('登录失败：' + err.message);
+                } finally {
+                    loginSubmitBtn.disabled = false;
+                    loginSubmitBtn.textContent = '登录';
                 }
             };
 
@@ -802,55 +909,31 @@
                 }
             };
 
-            // 微信扫码登录（后端返回二维码URL并轮询登录结果）
-            const wechatQrBtn = document.getElementById('wechat-qr-btn');
-            const qrImgBox = document.getElementById('qr-img');
-            const wechatStatus = document.getElementById('wechat-status');
-            let wechatPollTimer = null;
-
-            wechatQrBtn.onclick = async () => {
-                wechatStatus.textContent = '';
-                qrImgBox.innerHTML = '<span style="opacity:.6;">生成中…</span>';
-                try {
-                    const ret = await api('api/auth/wechat/qr');
-                    if (!ret.qrUrl || !ret.sessionId) throw new Error('后端未返回二维码信息');
-                    qrImgBox.innerHTML = `<img src="${ret.qrUrl}" alt="微信登录二维码" />`;
-                    wechatStatus.textContent = '请用微信扫码确认登录…';
-
-                    // 轮询
-                    if (wechatPollTimer) clearInterval(wechatPollTimer);
-                    wechatPollTimer = setInterval(async () => {
-                        try {
-                            const r = await api(`api/auth/wechat/poll?sessionId=${encodeURIComponent(ret.sessionId)}`);
-                            if (r && r.token) {
-                                clearInterval(wechatPollTimer);
-                                authState.token = r.token;
-                                authState.user = r.user;
-                                localStorage.setItem('WQT_AUTH_TOKEN', authState.token);
-                                saveEnvMarkers();
-                                setAuthUI(true);
-                                closeAuthModal();
-                            }
-                        } catch (_) { }
-                    }, 2000);
-
-                    // 2分钟超时
-                    setTimeout(() => {
-                        if (wechatPollTimer) clearInterval(wechatPollTimer);
-                    }, 120000);
-
-                } catch (err) {
-                    qrImgBox.innerHTML = '<span style="opacity:.6;">二维码</span>';
-                    wechatStatus.textContent = '暂不可用：' + err.message;
-                }
-            };
-
             // 提前结束按钮逻辑
             const earlyFinishBtn = document.getElementById('early-finish-btn');
             if (earlyFinishBtn) {
                 earlyFinishBtn.onclick = () => {
                     if (confirm('⚠️ 确定要提前结束当前游戏吗？\n\n这将立即结算当前分数并生成复盘报告。')) {
+                        if (timerInterval) clearInterval(timerInterval);
                         finalizeSession('early_finish');
+                        playSound('success');
+                        const totalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
+                        const completed = window.globalState.state.cardsCompleted || 0;
+                        const target = window.globalState.targetCards || 15;
+                        document.getElementById('progress-display').innerHTML = `
+                            <div style="color: #faad14; text-align: center; padding: 20px;">
+                                <h1 style="font-size: 3rem; margin: 20px 0; color: #faad14; text-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);">⏹️ 游戏已提前结束</h1>
+                                <p style="font-size: 1.2rem; margin: 15px 0;">已完成 ${completed}/${target} 张卡牌</p>
+                                <p style="font-size: 1.4rem; margin: 15px 0;"><strong>最终总分：${totalScore}/50</strong></p>
+                                <p style="font-size: 1.1rem; margin: 10px 0;">阶段失败次数：${window.globalState.state.stageFailures}/3</p>
+                                <button onclick="location.reload()" style="padding: 12px 24px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; font-size: 1.1rem;">开始新游戏</button>
+                            </div>
+                        `;
+                        earlyFinishBtn.style.display = 'none';
+                        // 自动打开复盘
+                        if (window.GameReview && window.GameReview.openReview) {
+                            window.GameReview.openReview();
+                        }
                     }
                 };
             }
@@ -959,6 +1042,7 @@
             };
             let activeSessionId = null;
             let hasFinishedSession = false;
+            let gameEnded = false; // 本局是否已结束（通关/失败/超时）；结束后进入自由体验模式：只出反馈，不计分、不记录、不回传
             const cardTimeMarks = {};
 
             function clearGameState() {
@@ -973,6 +1057,7 @@
                     cardsCompleted: window.globalState.state.cardsCompleted,
                     stageFailures: window.globalState.state.stageFailures,
                     currentPhase: window.globalState.state.currentPhase,
+                    gameHistory: window.globalState.state.gameHistory,
                     skillsUsed,
                     creativeOptions,
                     activeSessionId,
@@ -982,7 +1067,8 @@
                     isPaused,
                     notifiedPhases: Array.from(notifiedPhases),
                     gameAnalytics,
-                    savedAt: Date.now()
+                    savedAt: Date.now(),
+                    userId: authState.user?.id || null
                 };
                 localStorage.setItem('WQT_GAME_STATE', JSON.stringify(stateToSave));
             }
@@ -993,6 +1079,12 @@
                 try {
                     const state = JSON.parse(saved);
                     if (!state.activeSessionId) return false;
+
+                    // 游戏状态绑定用户：不匹配则清除，防止串号
+                    if (state.userId && authState.user?.id && state.userId !== authState.user.id) {
+                        clearGameState();
+                        return false;
+                    }
 
                     if (!confirm('检测到有进行中的游戏，是否恢复？\n\n选择"取消"将丢弃暂离的进度。')) {
                         clearGameState();
@@ -1014,9 +1106,15 @@
                     window.globalState.targetCards = state.targetCards;
                     window.globalState.cardsPerPhase = state.cardsPerPhase;
 
+                    // 恢复游戏状态和操作历史
+                    window.globalState.state.gameHistory = state.gameHistory || [];
+                    window.globalState.state.gameStarted = true;
+                    window.globalState.setGameStatus('playing');
+
                     skillsUsed = state.skillsUsed || { '安全力': false, '脑波力': false, '实感力': false, '创心力': false, '沟通力': false };
                     creativeOptions = state.creativeOptions || {};
                     isPaused = state.isPaused || false;
+                    gameEnded = false; // 恢复的是进行中的对局
                     notifiedPhases = new Set(state.notifiedPhases || []);
                     if (state.gameAnalytics) gameAnalytics = Object.assign(gameAnalytics, state.gameAnalytics);
 
@@ -1068,14 +1166,17 @@
 
             function finalizeSession(result) {
                 if (hasFinishedSession) return;
+                gameEnded = true; // 标记本局结束，后续选牌进入自由体验模式
                 clearGameState(); // 清除本地暂离状态
-                const finalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
+                const attributes = window.globalState.getAttributes();
+                const finalScore = Object.values(attributes).reduce((sum, value) => sum + value, 0);
                 hasFinishedSession = true;
                 if (window.GameReview && window.GameReview.finishSession) {
                     window.GameReview.finishSession({
                         finalScore,
                         endedAt: Date.now(),
-                        payload: { result }
+                        attributes,
+                        payload: { result, attributes }
                     });
                 }
             }
@@ -1088,6 +1189,12 @@
                     const checkbox = btn.querySelector('.skill-checkbox');
 
                     if (skillsUsed[skill]) return;
+
+                    // 自由体验模式（本局已结束）：技能不可用，不影响已结算的数据
+                    if (gameEnded) {
+                        document.getElementById('progress-display').innerHTML = `<p>本局已结束，当前为自由体验模式，数智技能不可用。</p>`;
+                        return;
+                    }
 
                     // 创心力技能需要填写题号
                     if (skill === '创心力') {
@@ -1393,11 +1500,22 @@
                 }
                 document.getElementById('modal-body').innerHTML = `
                     <h3>卡牌 ${cardNum} - ${card.safetyType}</h3>
-                    <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
-                        <p style="flex: 1; margin: 0;">${card.event}</p>
-                        <button id="play-audio-btn" style="cursor: pointer; padding: 5px 10px; border-radius: 5px; border: 1px solid #ccc; background: #f9f9f9; display: flex; align-items: center; gap: 5px; white-space: nowrap;">
-                            🔊 自动阅读
+                    <p>${card.event}</p>
+                    <div class="audio-player" id="card-audio-player">
+                        <button class="audio-player-btn" id="audio-play-btn" title="播放/暂停">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                                <path id="audio-icon-path" d="M4 2.5v11l10-5.5L4 2.5z"/>
+                            </svg>
                         </button>
+                        <div class="audio-player-track">
+                            <div class="audio-player-progress-wrap" id="audio-progress-wrap">
+                                <div class="audio-player-progress" id="audio-progress"></div>
+                            </div>
+                            <div class="audio-player-time">
+                                <span id="audio-current-time">0:00</span>
+                                <span id="audio-duration">0:00</span>
+                            </div>
+                        </div>
                     </div>
                     <div style="margin-top: 2rem;">
                         <h4>选项：</h4>
@@ -1409,48 +1527,120 @@
                     </div>
                 `;
 
-                // 绑定播放事件
-                const playBtn = document.getElementById('play-audio-btn');
-                if (playBtn) {
-                    playBtn.onclick = () => {
-                        const audioUrl = `http://oss.ai5000days.com/cards_audio/${card.id}.mp3`;
-                        const audio = new Audio(audioUrl);
+                // 初始化音频播放器
+                (function initAudioPlayer() {
+                    const audioUrl = card.audio_url || `https://ai5000days-scoring-system-hk.oss-cn-hongkong.aliyuncs.com/cards_audio/${card.key}.mp3`;
+                    const audio = new Audio();
+                    audio.preload = 'metadata';
+                    audio.src = audioUrl;
 
-                        playBtn.disabled = true;
-                        playBtn.textContent = '播报中...';
+                    const player = document.getElementById('card-audio-player');
+                    const btn = document.getElementById('audio-play-btn');
+                    const iconPath = document.getElementById('audio-icon-path');
+                    const progressWrap = document.getElementById('audio-progress-wrap');
+                    const progressBar = document.getElementById('audio-progress');
+                    const currentTimeEl = document.getElementById('audio-current-time');
+                    const durationEl = document.getElementById('audio-duration');
 
-                        audio.play().catch(e => {
-                            console.error("音频播放失败:", e);
-                            alert('音频播放失败，请稍后再试。');
-                            playBtn.disabled = false;
-                            playBtn.textContent = '🔊 自动阅读';
-                        });
+                    // SVG 路径：播放三角 / 暂停双杠
+                    const PLAY_ICON = 'M4 2.5v11l10-5.5L4 2.5z';
+                    const PAUSE_ICON = 'M4 2h3v12H4V2zm5 0h3v12H9V2z';
 
-                        audio.onended = () => {
-                            playBtn.disabled = false;
-                            playBtn.textContent = '🔊 自动阅读';
-                        };
+                    let isPlaying = false;
+                    let loaded = false;
 
-                        audio.onerror = () => {
-                            console.error("音频资源加载失败");
-                            alert('未找到该卡牌的音频资源。');
-                            playBtn.disabled = false;
-                            playBtn.textContent = '🔊 自动阅读';
-                        };
+                    function fmt(sec) {
+                        if (!sec || !isFinite(sec)) return '0:00';
+                        const m = Math.floor(sec / 60);
+                        const s = Math.floor(sec % 60);
+                        return m + ':' + (s < 10 ? '0' : '') + s;
+                    }
+
+                    audio.addEventListener('loadedmetadata', () => {
+                        loaded = true;
+                        durationEl.textContent = fmt(audio.duration);
+                        player.classList.remove('is-loading');
+                    });
+
+                    audio.addEventListener('timeupdate', () => {
+                        if (!audio.duration) return;
+                        const pct = (audio.currentTime / audio.duration) * 100;
+                        progressBar.style.width = pct + '%';
+                        currentTimeEl.textContent = fmt(audio.currentTime);
+                    });
+
+                    audio.addEventListener('ended', () => {
+                        isPlaying = false;
+                        iconPath.setAttribute('d', PLAY_ICON);
+                        btn.classList.remove('is-playing');
+                        progressBar.style.width = '0%';
+                        currentTimeEl.textContent = '0:00';
+                        audio.currentTime = 0;
+                    });
+
+                    audio.addEventListener('error', () => {
+                        console.error('音频资源加载失败');
+                        player.classList.remove('is-loading');
+                        btn.disabled = true;
+                        currentTimeEl.textContent = '无音频';
+                        durationEl.textContent = '';
+                    });
+
+                    // 播放 / 暂停
+                    btn.onclick = () => {
+                        if (!loaded && !audio.readyState) {
+                            player.classList.add('is-loading');
+                        }
+                        if (isPlaying) {
+                            audio.pause();
+                            isPlaying = false;
+                            iconPath.setAttribute('d', PLAY_ICON);
+                            btn.classList.remove('is-playing');
+                        } else {
+                            audio.play().then(() => {
+                                isPlaying = true;
+                                iconPath.setAttribute('d', PAUSE_ICON);
+                                btn.classList.add('is-playing');
+                                player.classList.remove('is-loading');
+                            }).catch(e => {
+                                console.error('音频播放失败:', e);
+                                player.classList.remove('is-loading');
+                                btn.disabled = true;
+                                currentTimeEl.textContent = '播放失败';
+                                durationEl.textContent = '';
+                            });
+                        }
                     };
-                }
+
+                    // 点击进度条跳转
+                    progressWrap.onclick = (e) => {
+                        if (!audio.duration) return;
+                        const rect = progressWrap.getBoundingClientRect();
+                        const ratio = (e.clientX - rect.left) / rect.width;
+                        audio.currentTime = ratio * audio.duration;
+                    };
+
+                    // 存储引用以便模态框关闭时清理
+                    window._cardAudio = audio;
+                })();
 
                 document.getElementById('modal').style.display = 'block';
             };
 
-            // 关闭模态框
-            document.querySelector('.close').onclick = () => {
+            // 关闭模态框（同时停止音频）
+            function closeCardModal() {
+                if (window._cardAudio) {
+                    window._cardAudio.pause();
+                    window._cardAudio.currentTime = 0;
+                }
                 document.getElementById('modal').style.display = 'none';
-            };
+            }
+
+            document.querySelector('.close').onclick = closeCardModal;
 
             window.onclick = (event) => {
                 if (event.target === document.getElementById('modal')) {
-                    document.getElementById('modal').style.display = 'none';
+                    closeCardModal();
                 }
             };
 
@@ -1466,6 +1656,23 @@
                     const card = window.CARD_DATA.find(c => c.id === parseInt(cardNum));
                     if (card && card.options[selectedChoice]) {
                         const option = card.options[selectedChoice];
+
+                        // 自由体验模式：本局已结束（通关/失败/超时），只展示反馈，不计分、不记录历史、不回传后端
+                        if (gameEnded) {
+                            document.getElementById('choice-display').innerHTML = `
+                                <div>
+                                    <span style="display:inline-block;background:#faad14;color:#fff;font-size:12px;padding:2px 10px;border-radius:10px;margin-bottom:8px;">自由体验 · 不计分</span>
+                                    <h4>卡牌 ${cardNum} - ${selectedChoice}</h4>
+                                    <p>${option.consequence}</p>
+                                </div>
+                            `;
+                            // 仅重置输入，不改动任何对局数据
+                            document.getElementById('card-number').value = '';
+                            document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+                            document.getElementById('submit-choice').disabled = true;
+                            selectedChoice = null;
+                            return;
+                        }
 
                         // 更新属性
                         const attrsBefore = window.globalState.getAttributes();
@@ -1526,6 +1733,12 @@
                                 if (timerInterval) clearInterval(timerInterval);
                                 finalizeSession('success');
                                 playSound('success'); // 播放通关成功声效
+                                // 最后一张卡牌的反馈也要展示：通关界面在 progress-display，选项反馈在 choice-display
+                                document.getElementById('choice-display').innerHTML = `
+                                    <div><h4>卡牌 ${cardNum} - ${selectedChoice}</h4>
+                                    <p>${option.consequence}</p>
+                                    </div>
+                                `;
                                 const totalScore = Object.values(window.globalState.getAttributes()).reduce((sum, value) => sum + value, 0);
                                 document.getElementById('progress-display').innerHTML = `
                                     <div style="color: #52c41a; text-align: center; padding: 20px;">
@@ -1605,6 +1818,8 @@
                         document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
                         document.getElementById('submit-choice').disabled = true;
                         selectedChoice = null;
+
+                        saveGameState(); // 保存卡牌选择后的状态
                     }
                 }
             };
@@ -1705,7 +1920,8 @@
                     duration: 5000,
                     targetCards: 15,
                     cardsPerPhase: { '启蒙期': 5, '成长期': 5, '青春期': 5 }
-                }
+                },
+                activityCode: null
             };
 
             const setupModal = document.getElementById('setup-modal');
@@ -1716,6 +1932,13 @@
                 document.querySelectorAll('.setup-step').forEach(el => el.classList.add('hidden'));
                 document.getElementById(`setup-step-${step}`).classList.remove('hidden');
             }
+
+            // 活动码查询 → 跳转活动子页面
+            document.getElementById('setup-activity-lookup').onclick = () => {
+                const code = document.getElementById('setup-activity-code').value.trim();
+                if (!code) return;
+                window.location.href = `/activity.html?tab=query&code=${encodeURIComponent(code)}`;
+            };
 
             // Step 1 Next
             document.getElementById('setup-next-btn').onclick = () => {
@@ -1799,7 +2022,9 @@
                             location: setupData.location,
                             players: setupData.players,
                             mode: setupData.mode,
-                            settings: setupData.settings
+                            settings: setupData.settings,
+                            cardGroupId: window.CURRENT_CARD_GROUP ? window.CURRENT_CARD_GROUP.id : null,
+                            activityCode: setupData.activityCode || null
                         }
                     });
                     activeSessionId = startRet?.sessionId || null;
@@ -1809,8 +2034,13 @@
                     if (window.GameReview && window.GameReview.recordEvent && activeSessionId) {
                         window.GameReview.recordEvent('game_start', { ts: Date.now(), config: setupData });
                     }
-                } catch (_) {
+                } catch (err) {
                     activeSessionId = null;
+                    if (window.GameReview && window.GameReview.setSessionId) {
+                        window.GameReview.setSessionId(null);
+                    }
+                    alert('游戏创建失败，请检查网络后重试。\n(' + (err.message || '未知错误') + ')');
+                    return;
                 }
 
                 setupModal.style.display = 'none';
@@ -1829,11 +2059,15 @@
                 window.globalState.cardsPerPhase = settings.cardsPerPhase;
 
                 isPaused = false;
+                gameEnded = false; // 新游戏：退出自由体验模式
                 notifiedPhases.clear(); // 新游戏重置阶段通知记录
                 window.globalState.state.cardsCompleted = 0;
                 window.globalState.state.stageFailures = 0;
-                window.globalState.state.currentPhase = '启蒙期';
-                document.getElementById('current-phase').textContent = '当前阶段: 启蒙期';
+                // 起始阶段以本局模式的卡牌分布为准：取第一个数量>0的阶段，而非硬编码“启蒙期”
+                const startPhase = Object.keys(settings.cardsPerPhase || {})
+                    .find(p => (settings.cardsPerPhase[p] || 0) > 0) || '启蒙期';
+                window.globalState.state.currentPhase = startPhase;
+                document.getElementById('current-phase').textContent = `当前阶段: ${startPhase}`;
                 document.getElementById('cards-completed').textContent = `已完成: 0/${settings.targetCards}`;
                 document.getElementById('stage-failures').textContent = '阶段失败: 0/3';
                 document.getElementById('pause-game').textContent = '暂停';
@@ -1872,6 +2106,7 @@
                 updateTimer();
                 document.getElementById('progress-display').innerHTML = `<p>游戏开始！当前模式：${setupData.mode === 'standard' ? '标准版' : (setupData.mode === 'essence' ? '精华版' : '自由版')}</p>`;
                 document.getElementById('choice-display').innerHTML = '<p>等待选择...</p>';
+                saveGameState(); // 保存游戏初始状态
             }
 
             document.getElementById('pause-game').onclick = () => {
@@ -1908,21 +2143,21 @@
 
             // 全局重置函数
             window.resetAttributes = () => {
-                // 根据已完成卡牌数调整已完成卡牌数 (重置到当前阶段的起点)
+                // 根据已完成卡牌数把进度回退到“当前阶段的起点”。
+                // 阶段顺序以本局 cardsPerPhase 的配置顺序为准，不再硬编码 启蒙期/成长期/青春期。
                 const currentCompleted = window.globalState.state.cardsCompleted;
                 const cardsConfig = window.globalState.cardsPerPhase || { '启蒙期': 5, '成长期': 5, '青春期': 5 };
+                const phaseEntries = Object.entries(cardsConfig).filter(([_, count]) => count > 0);
 
-                const t1 = cardsConfig['启蒙期'] || 0;
-                const t2 = t1 + (cardsConfig['成长期'] || 0);
-                // const t3 = t2 + (cardsConfig['青春期'] || 0);
-
-                if (currentCompleted <= t1) {
-                    window.globalState.state.cardsCompleted = 0;
-                } else if (currentCompleted <= t2) {
-                    window.globalState.state.cardsCompleted = t1;
-                } else {
-                    window.globalState.state.cardsCompleted = t2;
+                let prevThreshold = 0; // 当前阶段起点
+                let rollback = 0;
+                for (const [, count] of phaseEntries) {
+                    const endThreshold = prevThreshold + count;
+                    if (currentCompleted <= endThreshold) { rollback = prevThreshold; break; }
+                    prevThreshold = endThreshold;
+                    rollback = prevThreshold;
                 }
+                window.globalState.state.cardsCompleted = rollback;
 
                 window.globalState.setAttributes({
                     '安全力': 3, '脑波力': 3, '实感力': 3, '创心力': 3, '沟通力': 3
@@ -1943,24 +2178,24 @@
             const waveCanvas = document.getElementById('mini-waveform');
             const recorderWidget = document.querySelector('.recorder-widget');
 
-            // 拖拽功能
+            // 拖拽功能（兼容 mouse + touch）
             let isDragging = false;
             let dragOffset = { x: 0, y: 0 };
 
-            recorderWidget.addEventListener('mousedown', (e) => {
+            function dragStart(clientX, clientY, e) {
                 if (e.target === recordBtn) return;
                 isDragging = true;
                 recorderWidget.classList.add('dragging');
                 const rect = recorderWidget.getBoundingClientRect();
-                dragOffset.x = e.clientX - rect.left;
-                dragOffset.y = e.clientY - rect.top;
+                dragOffset.x = clientX - rect.left;
+                dragOffset.y = clientY - rect.top;
                 e.preventDefault();
-            });
+            }
 
-            document.addEventListener('mousemove', (e) => {
+            function dragMove(clientX, clientY) {
                 if (!isDragging) return;
-                const x = e.clientX - dragOffset.x;
-                const y = e.clientY - dragOffset.y;
+                const x = clientX - dragOffset.x;
+                const y = clientY - dragOffset.y;
                 const maxX = window.innerWidth - recorderWidget.offsetWidth;
                 const maxY = window.innerHeight - recorderWidget.offsetHeight;
 
@@ -1968,14 +2203,37 @@
                 recorderWidget.style.top = Math.max(0, Math.min(y, maxY)) + 'px';
                 recorderWidget.style.right = 'auto';
                 recorderWidget.style.bottom = 'auto';
-            });
+            }
 
-            document.addEventListener('mouseup', () => {
+            function dragEnd() {
                 if (isDragging) {
                     isDragging = false;
                     recorderWidget.classList.remove('dragging');
                 }
-            });
+            }
+
+            // Mouse 事件
+            recorderWidget.addEventListener('mousedown', (e) => dragStart(e.clientX, e.clientY, e));
+            document.addEventListener('mousemove', (e) => dragMove(e.clientX, e.clientY));
+            document.addEventListener('mouseup', dragEnd);
+
+            // Touch 事件（Safari / 移动端）
+            recorderWidget.addEventListener('touchstart', (e) => {
+                // 录音按钮点击走 onclick，不拦截
+                if (e.target === recordBtn) return;
+                const t = e.touches[0];
+                dragStart(t.clientX, t.clientY, e);
+            }, { passive: false });
+            document.addEventListener('touchmove', (e) => {
+                if (!isDragging) return;
+                const t = e.touches[0];
+                dragMove(t.clientX, t.clientY);
+                e.preventDefault();
+            }, { passive: false });
+            document.addEventListener('touchend', dragEnd);
+
+            // 阻止 iPad/iOS 长按弹出上下文菜单
+            recorderWidget.addEventListener('contextmenu', (e) => e.preventDefault());
 
             recordBtn.onclick = async () => {
                 if (!recorder.isRecording) {
@@ -2006,6 +2264,12 @@
                     }, 1000);
                 }
             };
+
+            window.addEventListener('beforeunload', () => {
+                if (hasStartedNewGame && !hasFinishedSession) {
+                    saveGameState();
+                }
+            });
 
             // 初始化登录状态
             initAuth();
