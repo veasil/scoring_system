@@ -30,3 +30,7 @@ check_staging.py
 implementation_plan.md
 to-do-list.md
 walkthrough.md
+
+# Benchmark / local data artifacts
+.tmp-bench/
+*.xlsx
