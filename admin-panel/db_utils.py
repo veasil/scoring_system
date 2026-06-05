@@ -1,4 +1,3 @@
-import sqlite3
 import pandas as pd
 import os
 import time
@@ -7,10 +6,21 @@ import base64
 import hashlib
 from dotenv import load_dotenv
 
+import psycopg2
+import psycopg2.extras
+
 # Load env to get key
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
-DB_PATH = os.environ.get('DB_PATH') or os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'wqt.db').replace('\\', '/')
+# PostgreSQL 连接串（Zeabur 注入 DATABASE_URL）
+DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('PG_MAIN_URL')
+DATABASE_SSL = os.environ.get('DATABASE_SSL') == 'true'
+
+
+def _q(sql):
+    """把 sqlite 风格的 `?` 占位符转换为 psycopg2 的 `%s`。
+    注意：若 SQL 同时含字面量 % 且带参数（如 LIKE '%x%'），需写成 %%。"""
+    return sql.replace('?', '%s')
 
 # --- Encryption Helpers ---
 try:
@@ -102,26 +112,29 @@ def retry_on_lock(max_retries=5, delay=0.1):
             while retries < max_retries:
                 try:
                     return func(*args, **kwargs)
-                except sqlite3.OperationalError as e:
-                    if "database is locked" in str(e):
-                        retries += 1
-                        time.sleep(delay * retries)
-                    else:
+                except psycopg2.OperationalError as e:
+                    # PG 没有"database is locked"，但死锁/瞬时连接问题可重试
+                    retries += 1
+                    time.sleep(delay * retries)
+                    if retries >= max_retries:
                         raise e
-            raise sqlite3.OperationalError(f"Database locked after {max_retries} retries")
+            raise psycopg2.OperationalError(f"DB error after {max_retries} retries")
         return wrapper
     return decorator
 
 def get_connection(read_only=False):
+    if not DATABASE_URL:
+        print("Error: DATABASE_URL 未配置")
+        return None
     try:
+        kwargs = {}
+        if DATABASE_SSL:
+            kwargs['sslmode'] = 'require'
+        conn = psycopg2.connect(DATABASE_URL, **kwargs)
         if read_only:
-            conn = sqlite3.connect(f'file:{DB_PATH}?mode=ro', uri=True)
-        else:
-            conn = sqlite3.connect(DB_PATH)
-            # Ensure WAL mode is active for better concurrency
-            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.set_session(readonly=True, autocommit=True)
         return conn
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         print(f"Error connecting to database: {e}")
         return None
 
@@ -129,7 +142,7 @@ def get_all_tables(read_only=True):
     conn = get_connection(read_only=read_only)
     if conn:
         try:
-            query = "SELECT name FROM sqlite_master WHERE type='table';"
+            query = "SELECT tablename AS name FROM pg_catalog.pg_tables WHERE schemaname = 'public';"
             df = pd.read_sql_query(query, conn)
             conn.close()
             return df
@@ -154,7 +167,7 @@ def run_query(query, params=None, read_only=True):
     if conn:
         try:
             if params:
-                df = pd.read_sql_query(query, conn, params=params)
+                df = pd.read_sql_query(_q(query), conn, params=params)
             else:
                 df = pd.read_sql_query(query, conn)
             
@@ -174,7 +187,7 @@ def execute_update(query, params=()):
     if conn:
         try:
             cursor = conn.cursor()
-            cursor.execute(query, params)
+            cursor.execute(_q(query), params)
             conn.commit()
             rows_affected = cursor.rowcount
             conn.close()
@@ -195,7 +208,7 @@ def init_db():
                     key TEXT PRIMARY KEY,
                     value TEXT,
                     description TEXT,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    updated_at TIMESTAMPTZ DEFAULT now()
                 )
             """)
             conn.commit()
@@ -227,22 +240,22 @@ def set_system_setting(key, value, description=None):
         try:
             cursor = conn.cursor()
             if description:
-                cursor.execute("""
-                    INSERT INTO system_settings (key, value, description, updated_at) 
+                cursor.execute(_q("""
+                    INSERT INTO system_settings (key, value, description, updated_at)
                     VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(key) DO UPDATE SET 
-                        value=excluded.value, 
+                    ON CONFLICT(key) DO UPDATE SET
+                        value=excluded.value,
                         description=excluded.description,
                         updated_at=excluded.updated_at
-                """, (key, final_value, description))
+                """), (key, final_value, description))
             else:
-                cursor.execute("""
-                    INSERT INTO system_settings (key, value, updated_at) 
+                cursor.execute(_q("""
+                    INSERT INTO system_settings (key, value, updated_at)
                     VALUES (?, ?, CURRENT_TIMESTAMP)
-                    ON CONFLICT(key) DO UPDATE SET 
-                        value=excluded.value, 
+                    ON CONFLICT(key) DO UPDATE SET
+                        value=excluded.value,
                         updated_at=excluded.updated_at
-                """, (key, final_value))
+                """), (key, final_value))
             conn.commit()
             conn.close()
             return True, None
