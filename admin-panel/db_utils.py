@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 # Load env to get key
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
 
-DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'wqt.db').replace('\\', '/')
+DB_PATH = os.environ.get('DB_PATH') or os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'wqt.db').replace('\\', '/')
 
 # --- Encryption Helpers ---
 try:
