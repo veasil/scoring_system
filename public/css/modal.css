@@ -386,6 +386,133 @@
 }
 
 /* ========================================
+   音频播放器小组件 - Card Audio Player
+   ======================================== */
+
+.audio-player {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 28px;
+    padding: 8px 14px;
+    margin-top: var(--space-sm);
+    min-height: 44px;
+    transition: background 0.2s;
+}
+
+.audio-player:hover {
+    background: rgba(0, 0, 0, 0.45);
+}
+
+.audio-player-btn {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: var(--color-primary-start);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+.audio-player-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 2px 12px rgba(102, 126, 234, 0.5);
+}
+
+.audio-player-btn:active {
+    transform: scale(0.95);
+}
+
+.audio-player-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.audio-player-btn.is-playing {
+    background: var(--color-warning);
+}
+
+.audio-player-track {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.audio-player-progress-wrap {
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: height 0.15s;
+}
+
+.audio-player-progress-wrap:hover {
+    height: 8px;
+}
+
+.audio-player-progress {
+    height: 100%;
+    background: linear-gradient(90deg, var(--color-primary-start), var(--color-primary-end));
+    border-radius: 3px;
+    width: 0%;
+    transition: width 0.1s linear;
+    pointer-events: none;
+}
+
+.audio-player-time {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.55);
+    font-variant-numeric: tabular-nums;
+    user-select: none;
+}
+
+.audio-player-error {
+    font-size: 12px;
+    color: #ff6b6b;
+    text-align: center;
+    padding: 4px 0;
+}
+
+.audio-player.is-loading .audio-player-btn {
+    pointer-events: none;
+}
+
+.audio-player.is-loading .audio-player-btn::after {
+    content: '';
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: audioSpin 0.6s linear infinite;
+}
+
+@keyframes audioSpin {
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
    录音器小组件
    ======================================== */
 
@@ -404,9 +531,19 @@
     box-shadow: var(--shadow-lg);
     border: 1px solid rgba(255, 255, 255, 0.3);
     cursor: move;
+    -webkit-user-select: none;
     user-select: none;
+    touch-action: none;
+    -webkit-touch-callout: none;
     transition: all var(--transition-base);
     z-index: var(--z-recorder);
+}
+
+.recorder-widget * {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+    touch-action: none;
 }
 
 .recorder-widget:hover {
@@ -471,5 +608,20 @@
         font-size: 2rem;
         width: 40px;
         height: 40px;
+    }
+
+    .audio-player {
+        padding: 6px 12px;
+        gap: 8px;
+    }
+
+    .audio-player-btn {
+        width: 30px;
+        height: 30px;
+        font-size: 14px;
+    }
+
+    .audio-player-time {
+        font-size: 10px;
     }
 }

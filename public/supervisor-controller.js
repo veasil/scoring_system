@@ -100,7 +100,38 @@ class SupervisorController {
         const canvas = document.getElementById('radar-chart');
         if (!canvas) return;
 
-        this.radarChart = new RadarChart(canvas, this.globalState.getAttributes());
+        const sessionMax = this.calcSessionMaxScores();
+        this.radarChart = new RadarChart(canvas, this.globalState.getAttributes(), sessionMax);
+    }
+
+    // 根据本局已玩卡牌计算各维度理论最高分（每张卡取最优选项）
+    calcSessionMaxScores() {
+        const history = this.globalState.state.gameHistory.filter(e => e.type === 'card_choice' && e.cardData);
+        const attrs = Object.keys(this.globalState.getAttributes());
+        // 初始值 = 游戏开始时的属性初始值（默认各 3）
+        const initVal = 3;
+        const maxScores = {};
+        attrs.forEach(a => { maxScores[a] = initVal; });
+
+        for (const entry of history) {
+            const options = entry.cardData.options;
+            if (!options) continue;
+            // 对每个维度，找这张卡所有选项中给该维度的最大增量
+            const bestDelta = {};
+            attrs.forEach(a => { bestDelta[a] = -Infinity; });
+            for (const optKey of Object.keys(options)) {
+                const effects = options[optKey].attributeEffects;
+                if (!effects) continue;
+                for (const a of attrs) {
+                    const delta = Number(effects[a] || 0);
+                    if (delta > bestDelta[a]) bestDelta[a] = delta;
+                }
+            }
+            for (const a of attrs) {
+                if (bestDelta[a] > -Infinity) maxScores[a] += bestDelta[a];
+            }
+        }
+        return maxScores;
     }
 
     // 绑定事件
@@ -196,7 +227,8 @@ class SupervisorController {
     // 更新雷达图
     updateRadarChart() {
         if (this.radarChart) {
-            this.radarChart.updateData(this.globalState.getAttributes());
+            const sessionMax = this.calcSessionMaxScores();
+            this.radarChart.updateData(this.globalState.getAttributes(), sessionMax);
         }
     }
 
@@ -290,6 +322,7 @@ class SupervisorController {
                         <div class="history-action">${content}</div>
                         ${entry.cardData ? `<div class="history-event">${entry.cardData.safetyType}</div>` : ''}
                         <div class="history-changes ${changes !== '无变化' ? 'has-changes' : ''}">${changes}</div>
+                        ${entry.cardData?.attribute_reason ? `<div class="history-reason">💡 ${entry.cardData.attribute_reason}</div>` : ''}
                     </div>
                 </div>
             `;
@@ -338,18 +371,20 @@ class SupervisorController {
 
 // 简单的雷达图实现
 class RadarChart {
-    constructor(canvas, data) {
+    constructor(canvas, data, maxScores) {
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
         this.data = data;
+        this.maxScores = maxScores || null; // 各维度理论满分 { "安全力": 20, ... }
         this.center = { x: canvas.width / 2, y: canvas.height / 2 };
-        this.radius = Math.min(canvas.width, canvas.height) / 2 - 40;
+        this.radius = Math.min(canvas.width, canvas.height) / 2 - 50;
 
         this.draw();
     }
 
-    updateData(newData) {
+    updateData(newData, maxScores) {
         this.data = newData;
+        if (maxScores !== undefined) this.maxScores = maxScores;
         this.draw();
     }
 
@@ -397,7 +432,21 @@ class RadarChart {
         }
     }
 
+    // 获取某维度的归一化值 (0-1)
+    getNormalizedValue(index) {
+        const attributes = Object.keys(this.data);
+        const values = Object.values(this.data);
+        const val = values[index] || 0;
+        if (this.maxScores) {
+            const attrName = attributes[index];
+            const max = this.maxScores[attrName] || 10;
+            return Math.min(val / max, 1);
+        }
+        return val / 10; // 旧逻辑兜底
+    }
+
     drawData(values, angleStep) {
+        const attributes = Object.keys(this.data);
         this.ctx.fillStyle = 'rgba(102, 126, 234, 0.3)';
         this.ctx.strokeStyle = '#667eea';
         this.ctx.lineWidth = 2;
@@ -405,7 +454,7 @@ class RadarChart {
         this.ctx.beginPath();
         for (let i = 0; i < values.length; i++) {
             const angle = i * angleStep - Math.PI / 2;
-            const value = values[i] / 10; // 归一化到0-1
+            const value = this.getNormalizedValue(i);
             const x = this.center.x + Math.cos(angle) * this.radius * value;
             const y = this.center.y + Math.sin(angle) * this.radius * value;
 
@@ -423,7 +472,7 @@ class RadarChart {
         this.ctx.fillStyle = '#667eea';
         for (let i = 0; i < values.length; i++) {
             const angle = i * angleStep - Math.PI / 2;
-            const value = values[i] / 10;
+            const value = this.getNormalizedValue(i);
             const x = this.center.x + Math.cos(angle) * this.radius * value;
             const y = this.center.y + Math.sin(angle) * this.radius * value;
 
@@ -434,41 +483,61 @@ class RadarChart {
     }
 
     drawLabels(attributes, angleStep) {
-        this.ctx.fillStyle = '#333';
-        this.ctx.font = '12px Arial';
-        this.ctx.textAlign = 'center';
-        this.ctx.textBaseline = 'middle';
+        const values = Object.values(this.data);
 
         for (let i = 0; i < attributes.length; i++) {
             const angle = i * angleStep - Math.PI / 2;
-            const x = this.center.x + Math.cos(angle) * (this.radius + 20);
-            const y = this.center.y + Math.sin(angle) * (this.radius + 20);
+            const x = this.center.x + Math.cos(angle) * (this.radius + 25);
+            const y = this.center.y + Math.sin(angle) * (this.radius + 25);
 
-            this.ctx.fillText(attributes[i], x, y);
+            // 属性名
+            this.ctx.fillStyle = '#333';
+            this.ctx.font = 'bold 12px Arial';
+            this.ctx.textAlign = 'center';
+            this.ctx.textBaseline = 'middle';
+            this.ctx.fillText(attributes[i], x, y - 8);
+
+            // 分值：当前 / 最大
+            const val = values[i] || 0;
+            const max = this.maxScores ? (this.maxScores[attributes[i]] || 10) : 10;
+            this.ctx.fillStyle = '#667eea';
+            this.ctx.font = '11px Arial';
+            this.ctx.fillText(`${val} / ${max}`, x, y + 6);
         }
     }
 
     drawTotalScore(values) {
-        // 计算总分
-        const totalScore = values.reduce((sum, value) => sum + value, 0);
-        const maxScore = values.length * 10; // 最大可能分数
+        const attributes = Object.keys(this.data);
+        // 计算得分率 & 总分
+        let totalRate = 0;
+        let dimCount = 0;
+        let totalActual = 0;
+        let totalMax = 0;
+        for (let i = 0; i < values.length; i++) {
+            totalRate += this.getNormalizedValue(i);
+            dimCount++;
+            totalActual += (values[i] || 0);
+            const max = this.maxScores ? (this.maxScores[attributes[i]] || 10) : 10;
+            totalMax += max;
+        }
+        const scoreRate = dimCount > 0 ? Math.round((totalRate / dimCount) * 100) : 0;
 
-        // 绘制总分数字
+        // 得分率数字
         this.ctx.fillStyle = '#667eea';
-        this.ctx.font = 'bold 20px Arial';
+        this.ctx.font = 'bold 24px Arial';
         this.ctx.textAlign = 'center';
         this.ctx.textBaseline = 'middle';
-        this.ctx.fillText(totalScore.toString(), this.center.x, this.center.y - 8);
+        this.ctx.fillText(`${scoreRate}%`, this.center.x, this.center.y - 12);
 
-        // 绘制"总分"标签
+        // "得分率"标签
         this.ctx.fillStyle = '#666';
-        this.ctx.font = '12px Arial';
-        this.ctx.fillText('总分', this.center.x, this.center.y + 8);
+        this.ctx.font = '11px Arial';
+        this.ctx.fillText('得分率', this.center.x, this.center.y + 4);
 
-        // 绘制分数比例
+        // 总分明细：当前总分 / 理论满分
         this.ctx.fillStyle = '#999';
         this.ctx.font = '10px Arial';
-        this.ctx.fillText(`/ ${maxScore}`, this.center.x, this.center.y + 20);
+        this.ctx.fillText(`${totalActual} / ${totalMax} 分`, this.center.x, this.center.y + 18);
     }
 }
 

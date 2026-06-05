@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活动管理 - 伍力全开</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .page-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .nav-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .nav-bar a {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            opacity: 0.85;
+        }
+        .nav-bar a:hover { opacity: 1; }
+        .nav-bar h2 { color: white; font-size: 1.3rem; }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px 8px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+        }
+
+        .section { display: none; }
+        .section.active { display: block; }
+
+        h3 {
+            color: #333;
+            margin-bottom: 16px;
+            font-size: 1.1rem;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+            text-align: left;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: #555;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+            width: 100%;
+        }
+        .btn:hover { background: #5a6fd8; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        .msg {
+            font-size: 13px;
+            margin-top: 8px;
+            min-height: 18px;
+        }
+        .msg.success { color: #28a745; }
+        .msg.error { color: #dc3545; }
+
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+        .role-badge.staff {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        .role-badge.watcher {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .activity-result {
+            padding: 16px;
+            border: 1px solid #e1e5e9;
+            border-radius: 10px;
+            margin-top: 16px;
+        }
+        .activity-result .field {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+        .activity-result .field:last-child { border-bottom: none; }
+        .activity-result .field-label { color: #888; font-size: 13px; }
+        .activity-result .field-value { color: #333; font-size: 14px; font-weight: 500; }
+
+        .not-logged-in {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+        }
+        .not-logged-in a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page-container">
+        <div class="nav-bar">
+            <a href="/">&larr; 返回首页</a>
+            <h2>活动管理</h2>
+            <span></span>
+        </div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="create">创建活动</button>
+            <button class="tab-btn" data-tab="query">查询活动</button>
+        </div>
+
+        <!-- 创建活动 -->
+        <div class="section active" id="sec-create">
+            <div class="card">
+                <!-- 未登录状态 -->
+                <div id="create-not-logged-in" class="not-logged-in" style="display:none;">
+                    <p>请先 <a href="/?action=login">登录</a> 后再创建活动</p>
+                </div>
+
+                <!-- 已登录状态 -->
+                <div id="create-logged-in" style="display:none;">
+                    <div id="role-info"></div>
+
+                    <!-- 工作人员：直接创建 -->
+                    <div id="staff-create-form">
+                        <h3>创建新活动</h3>
+                        <form id="create-activity-form">
+                            <div class="form-group">
+                                <label>活动名称 *</label>
+                                <input type="text" id="create-name" placeholder="例如：社区亲子安全教育活动" required>
+                            </div>
+                            <div class="form-group">
+                                <label>活动地点</label>
+                                <input type="text" id="create-location" placeholder="例如：XX社区活动中心">
+                            </div>
+                            <div class="form-group">
+                                <label>组织者</label>
+                                <input type="text" id="create-organizer" placeholder="组织者名称（选填）">
+                            </div>
+                            <button type="submit" class="btn" id="create-submit-btn">创建活动</button>
+                            <div class="msg" id="create-msg"></div>
+                        </form>
+                    </div>
+
+                    <!-- 非工作人员：申请创建 -->
+                    <div id="watcher-apply-form" style="display:none;">
+                        <h3>申请创建活动</h3>
+                        <p style="color:#666;font-size:13px;margin-bottom:16px;">您当前是普通守望者，提交的活动申请将由管理员审核。</p>
+                        <form id="apply-activity-form">
+                            <div class="form-group">
+                                <label>活动名称 *</label>
+                                <input type="text" id="apply-name" placeholder="例如：社区亲子安全教育活动" required>
+                            </div>
+                            <div class="form-group">
+                                <label>活动地点</label>
+                                <input type="text" id="apply-location" placeholder="例如：XX社区活动中心">
+                            </div>
+                            <div class="form-group">
+                                <label>申请说明</label>
+                                <textarea id="apply-reason" placeholder="简要说明活动目的和计划（选填）" rows="3" style="resize:vertical;min-height:80px;"></textarea>
+                            </div>
+                            <button type="submit" class="btn" id="apply-submit-btn">提交申请</button>
+                            <div class="msg" id="apply-msg"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 查询活动 -->
+        <div class="section" id="sec-query">
+            <div class="card">
+                <h3>查询活动</h3>
+                <p style="color:#666;font-size:13px;margin-bottom:16px;">输入活动码查询活动详情</p>
+                <div class="form-group">
+                    <label>活动码</label>
+                    <div style="display:flex;gap:8px;">
+                        <input type="text" id="query-code" placeholder="例如：ACT-001" style="flex:1;">
+                        <button class="btn" id="query-btn" style="width:auto;padding:10px 20px;">查询</button>
+                    </div>
+                </div>
+                <div class="msg" id="query-msg"></div>
+                <div id="query-result" style="display:none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    const API_BASE = '';
+    const TOKEN_KEY = 'WQT_AUTH_TOKEN';
+
+    // --- JWT 解析 ---
+    function parseJwt(token) {
+        try {
+            const base64Url = token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            return JSON.parse(decodeURIComponent(atob(base64).split('').map(c =>
+                '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+            ).join('')));
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getToken() {
+        return localStorage.getItem(TOKEN_KEY);
+    }
+
+    function getUserRole() {
+        const token = getToken();
+        if (!token) return null;
+        const payload = parseJwt(token);
+        return payload ? payload.role : null;
+    }
+
+    function isStaff(role) {
+        return ['boss', 'operator', 'enterprise'].includes(role);
+    }
+
+    // --- Tab 切换 ---
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('sec-' + btn.dataset.tab).classList.add('active');
+        });
+    });
+
+    // --- URL 参数处理 ---
+    function handleUrlParams() {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab) {
+            const tabBtn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+            if (tabBtn) tabBtn.click();
+        }
+        const code = params.get('code');
+        if (code) {
+            document.getElementById('query-code').value = code;
+            if (tab === 'query') {
+                setTimeout(() => doQuery(), 100);
+            }
+        }
+    }
+
+    // --- 初始化创建 tab ---
+    function initCreateTab() {
+        const token = getToken();
+        const role = getUserRole();
+
+        if (!token || !role) {
+            document.getElementById('create-not-logged-in').style.display = 'block';
+            document.getElementById('create-logged-in').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('create-not-logged-in').style.display = 'none';
+        document.getElementById('create-logged-in').style.display = 'block';
+
+        const roleInfo = document.getElementById('role-info');
+        if (isStaff(role)) {
+            roleInfo.innerHTML = `<span class="role-badge staff">工作人员</span>`;
+            document.getElementById('staff-create-form').style.display = 'block';
+            document.getElementById('watcher-apply-form').style.display = 'none';
+        } else {
+            roleInfo.innerHTML = `<span class="role-badge watcher">守望者</span>`;
+            document.getElementById('staff-create-form').style.display = 'none';
+            document.getElementById('watcher-apply-form').style.display = 'block';
+        }
+    }
+
+    // --- 工作人员直接创建活动 ---
+    document.getElementById('create-activity-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgEl = document.getElementById('create-msg');
+        const btn = document.getElementById('create-submit-btn');
+        const name = document.getElementById('create-name').value.trim();
+        if (!name) { msgEl.className = 'msg error'; msgEl.textContent = '请填写活动名称'; return; }
+
+        btn.disabled = true;
+        btn.textContent = '创建中...';
+        msgEl.textContent = '';
+
+        try {
+            const res = await fetch(`${API_BASE}/api/activities`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getToken()}`
+                },
+                body: JSON.stringify({
+                    name,
+                    location: document.getElementById('create-location').value.trim(),
+                    organizer: document.getElementById('create-organizer').value.trim()
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                msgEl.className = 'msg success';
+                msgEl.textContent = `创建成功！活动码：${data.activity_code || data.activityCode || ''}`;
+                document.getElementById('create-activity-form').reset();
+            } else {
+                msgEl.className = 'msg error';
+                msgEl.textContent = data.error || '创建失败';
+            }
+        } catch (err) {
+            msgEl.className = 'msg error';
+            msgEl.textContent = '网络错误，请重试';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '创建活动';
+        }
+    });
+
+    // --- 守望者申请创建活动 ---
+    document.getElementById('apply-activity-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgEl = document.getElementById('apply-msg');
+        const btn = document.getElementById('apply-submit-btn');
+        const name = document.getElementById('apply-name').value.trim();
+        if (!name) { msgEl.className = 'msg error'; msgEl.textContent = '请填写活动名称'; return; }
+
+        btn.disabled = true;
+        btn.textContent = '提交中...';
+        msgEl.textContent = '';
+
+        try {
+            const res = await fetch(`${API_BASE}/api/activities/apply`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getToken()}`
+                },
+                body: JSON.stringify({
+                    name,
+                    location: document.getElementById('apply-location').value.trim(),
+                    reason: document.getElementById('apply-reason').value.trim()
+                })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                msgEl.className = 'msg success';
+                msgEl.textContent = '申请已提交，等待管理员审核';
+                document.getElementById('apply-activity-form').reset();
+            } else {
+                msgEl.className = 'msg error';
+                msgEl.textContent = data.error || '提交失败';
+            }
+        } catch (err) {
+            msgEl.className = 'msg error';
+            msgEl.textContent = '网络错误，请重试';
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '提交申请';
+        }
+    });
+
+    // --- 查询活动 ---
+    async function doQuery() {
+        const code = document.getElementById('query-code').value.trim();
+        const msgEl = document.getElementById('query-msg');
+        const resultEl = document.getElementById('query-result');
+
+        if (!code) { msgEl.className = 'msg error'; msgEl.textContent = '请输入活动码'; return; }
+
+        msgEl.className = 'msg'; msgEl.textContent = '查询中...';
+        resultEl.style.display = 'none';
+
+        try {
+            const res = await fetch(`${API_BASE}/api/activities/by-code/${encodeURIComponent(code)}`);
+            const data = await res.json();
+            const act = data.activity;
+            if (res.ok && act) {
+                msgEl.textContent = '';
+                resultEl.style.display = 'block';
+                resultEl.innerHTML = `
+                    <div class="activity-result">
+                        <div class="field"><span class="field-label">活动名称</span><span class="field-value">${escHtml(act.name || '-')}</span></div>
+                        <div class="field"><span class="field-label">活动码</span><span class="field-value">${escHtml(act.activity_code || code)}</span></div>
+                        <div class="field"><span class="field-label">组织者</span><span class="field-value">${escHtml(act.organizer || '-')}</span></div>
+                        <div class="field"><span class="field-label">状态</span><span class="field-value">${escHtml(act.status || 'active')}</span></div>
+                    </div>
+                `;
+            } else {
+                msgEl.className = 'msg error';
+                msgEl.textContent = data.error || '未找到该活动码';
+                resultEl.style.display = 'none';
+            }
+        } catch (err) {
+            msgEl.className = 'msg error';
+            msgEl.textContent = '网络错误，请重试';
+        }
+    }
+
+    document.getElementById('query-btn').addEventListener('click', doQuery);
+    document.getElementById('query-code').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); doQuery(); }
+    });
+
+    function escHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    // --- 启动 ---
+    initCreateTab();
+    handleUrlParams();
+    </script>
+</body>
+</html>

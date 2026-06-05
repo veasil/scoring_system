@@ -2,564 +2,485 @@
 <html lang="zh-CN">
 
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>我的 — 伍力全开</title>
-  <link rel="stylesheet" href="css/base.css">
-  <link rel="stylesheet" href="css/auth.css">
-  <link rel="stylesheet" href="css/header.css">
-  <link rel="stylesheet" href="css/animations.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
-  <style>
-    :root {
-      --blue-dark: #1565C0;
-      --gold: #B8860B;
-      --blue-light: #42A5F5;
-      --bg: #0d1117;
-      --card-bg: rgba(255, 255, 255, 0.05);
-      --border: rgba(255, 255, 255, 0.12);
-      --text: #e6edf3;
-      --text-muted: #8b949e;
-    }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>个人中心 - 伍力全开</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: 'PingFang SC', sans-serif;
-      margin: 0;
-    }
+        .page-container {
+            max-width: 700px;
+            margin: 0 auto;
+        }
 
-    /* 顶部 header */
-    .my-header {
-      background: linear-gradient(135deg, var(--blue-dark) 0%, var(--gold) 100%);
-      padding: 24px 20px 40px;
-      text-align: center;
-      position: relative;
-    }
+        .nav-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .nav-bar a {
+            color: white;
+            text-decoration: none;
+            font-size: 14px;
+            opacity: 0.85;
+        }
+        .nav-bar a:hover { opacity: 1; }
+        .nav-bar h2 { color: white; font-size: 1.3rem; }
 
-    .my-header .back-btn {
-      position: absolute;
-      left: 16px;
-      top: 20px;
-      background: rgba(255, 255, 255, 0.2);
-      border: none;
-      border-radius: 50%;
-      width: 36px;
-      height: 36px;
-      cursor: pointer;
-      color: white;
-      font-size: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 10px;
+            padding: 4px;
+            margin-bottom: 20px;
+        }
+        .tab-btn {
+            flex: 1;
+            padding: 10px 8px;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: rgba(255,255,255,0.7);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: white;
+            color: #333;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
 
-    .avatar {
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.25);
-      margin: 0 auto 10px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 32px;
-    }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 16px;
+        }
 
-    .guardian-name {
-      font-size: 20px;
-      font-weight: bold;
-      margin: 0;
-    }
+        .section { display: none; }
+        .section.active { display: block; }
 
-    .level-badge {
-      display: inline-block;
-      margin-top: 8px;
-      padding: 4px 14px;
-      border-radius: 20px;
-      font-size: 13px;
-      font-weight: 600;
-    }
+        h3 {
+            color: #333;
+            margin-bottom: 16px;
+            font-size: 1.1rem;
+        }
 
-    .level-initial {
-      background: rgba(33, 150, 243, 0.3);
-      color: #42A5F5;
-      border: 1px solid #42A5F5;
-    }
+        .form-group {
+            margin-bottom: 16px;
+            text-align: left;
+        }
+        label {
+            display: block;
+            margin-bottom: 6px;
+            color: #555;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        textarea { resize: vertical; min-height: 100px; }
 
-    .level-advanced {
-      background: rgba(255, 193, 7, 0.3);
-      color: #FFD54F;
-      border: 1px solid #FFD54F;
-    }
+        .btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #5a6fd8; }
+        .btn:disabled { background: #ccc; cursor: not-allowed; }
 
-    .level-mentor {
-      background: rgba(244, 67, 54, 0.3);
-      color: #EF9A9A;
-      border: 1px solid #EF9A9A;
-    }
+        .msg {
+            font-size: 13px;
+            margin-top: 8px;
+            min-height: 18px;
+        }
+        .msg.success { color: #28a745; }
+        .msg.error { color: #dc3545; }
 
-    /* 升级申请按钮 */
-    .upgrade-btn {
-      margin-top: 12px;
-      padding: 8px 20px;
-      background: rgba(255, 255, 255, 0.15);
-      border: 1px solid rgba(255, 255, 255, 0.4);
-      border-radius: 20px;
-      color: white;
-      font-size: 13px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .info-row:last-child { border-bottom: none; }
+        .info-label { color: #888; font-size: 13px; }
+        .info-value { color: #333; font-size: 14px; font-weight: 500; }
 
-    .upgrade-btn:hover {
-      background: rgba(255, 255, 255, 0.25);
-    }
+        .session-item {
+            padding: 14px;
+            border: 1px solid #eee;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            transition: box-shadow 0.2s;
+        }
+        .session-item:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .session-date { color: #888; font-size: 13px; }
+        .session-score { font-weight: 600; color: #667eea; }
+        .session-meta { color: #999; font-size: 12px; }
 
-    .upgrade-btn:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .file-item a {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 13px;
+        }
+        .file-item a:hover { text-decoration: underline; }
+        .file-type {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #f0f0f0;
+            color: #666;
+        }
+        .file-type.audio { background: #e8f5e9; color: #2e7d32; }
+        .file-type.report { background: #e3f2fd; color: #1565c0; }
 
-    /* Tab 导航 */
-    .tab-bar {
-      display: flex;
-      border-bottom: 1px solid var(--border);
-      background: rgba(0, 0, 0, 0.3);
-      overflow-x: auto;
-    }
+        .empty-state {
+            text-align: center;
+            color: #999;
+            padding: 40px 20px;
+            font-size: 14px;
+        }
 
-    .tab-btn {
-      flex: 1;
-      min-width: 80px;
-      padding: 14px 8px;
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 13px;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all 0.2s;
-      white-space: nowrap;
-    }
-
-    .tab-btn.active {
-      color: var(--blue-light);
-      border-bottom-color: var(--blue-light);
-    }
-
-    /* 内容区 */
-    .tab-content {
-      display: none;
-      padding: 20px 16px;
-    }
-
-    .tab-content.active {
-      display: block;
-    }
-
-    /* 卡片 */
-    .card {
-      background: var(--card-bg);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 16px;
-      margin-bottom: 12px;
-    }
-
-    .card-title {
-      font-weight: 600;
-      margin-bottom: 6px;
-    }
-
-    .card-meta {
-      color: var(--text-muted);
-      font-size: 12px;
-      margin-bottom: 4px;
-    }
-
-    .card-score {
-      font-size: 22px;
-      font-weight: bold;
-      color: var(--blue-light);
-    }
-
-    /* 表单 */
-    textarea {
-      width: 100%;
-      box-sizing: border-box;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 12px;
-      color: var(--text);
-      font-size: 14px;
-      resize: vertical;
-      min-height: 100px;
-      font-family: inherit;
-    }
-
-    .submit-btn {
-      width: 100%;
-      margin-top: 10px;
-      padding: 12px;
-      background: linear-gradient(135deg, var(--blue-dark), #1976D2);
-      border: none;
-      border-radius: 8px;
-      color: white;
-      font-size: 15px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: opacity 0.2s;
-    }
-
-    .submit-btn:hover {
-      opacity: 0.85;
-    }
-
-    .submit-btn:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .type-selector {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-
-    .type-btn {
-      padding: 6px 16px;
-      border-radius: 20px;
-      border: 1px solid var(--border);
-      background: none;
-      color: var(--text-muted);
-      cursor: pointer;
-      font-size: 13px;
-    }
-
-    .type-btn.active {
-      background: var(--blue-dark);
-      color: white;
-      border-color: var(--blue-dark);
-    }
-
-    /* 空状态 */
-    .empty-state {
-      text-align: center;
-      color: var(--text-muted);
-      padding: 40px 20px;
-    }
-
-    .empty-state .icon {
-      font-size: 40px;
-      margin-bottom: 12px;
-    }
-
-    /* Toast */
-    #toast {
-      position: fixed;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #4CAF50;
-      color: white;
-      padding: 10px 24px;
-      border-radius: 8px;
-      font-size: 14px;
-      display: none;
-      z-index: 999;
-    }
-
-    /* 登录提示 */
-    #login-wall {
-      text-align: center;
-      padding: 60px 20px;
-    }
-
-    #login-wall h2 {
-      color: var(--text-muted);
-      margin-bottom: 16px;
-    }
-
-    .go-login-btn {
-      padding: 12px 32px;
-      background: var(--blue-dark);
-      border: none;
-      border-radius: 8px;
-      color: white;
-      font-size: 15px;
-      cursor: pointer;
-    }
-  </style>
+        .loading { text-align: center; color: #999; padding: 20px; }
+    </style>
 </head>
 
 <body>
+    <div class="page-container">
+        <div class="nav-bar">
+            <a id="home-link" href="/">&larr; 返回首页</a>
+            <h2>个人中心</h2>
+            <a href="#" id="logout-btn">退出登录</a>
+        </div>
 
-  <div id="app">
-    <!-- 登录提示 -->
-    <div id="login-wall" style="display:none">
-      <div style="font-size:48px;margin-bottom:16px">👁️</div>
-      <h2>请先登录</h2>
-      <p style="color:var(--text-muted);margin-bottom:24px">登录后查看你的守望师档案</p>
-      <button class="go-login-btn" id="go-login-btn">前往登录</button>
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="profile">个人信息</button>
+            <button class="tab-btn" data-tab="activities">活动记录</button>
+            <button class="tab-btn" data-tab="feedback">反馈</button>
+        </div>
+
+        <!-- 个人信息 -->
+        <div class="section active" id="sec-profile">
+            <div class="card">
+                <h3>基本信息</h3>
+                <div id="profile-info">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>修改信息</h3>
+                <form id="edit-profile-form">
+                    <div class="form-group">
+                        <label>真实姓名</label>
+                        <input type="text" id="edit-realname" maxlength="20" placeholder="请输入真实姓名">
+                    </div>
+                    <div class="form-group">
+                        <label>守望师名</label>
+                        <input type="text" id="edit-guardian" maxlength="20" placeholder="游戏中显示的昵称">
+                    </div>
+                    <button type="submit" class="btn">保存修改</button>
+                    <div class="msg" id="profile-msg"></div>
+                </form>
+            </div>
+            <div class="card">
+                <h3>修改密码</h3>
+                <form id="password-form">
+                    <div class="form-group" id="old-pw-group">
+                        <label>旧密码 <span style="color:#999;font-weight:normal;">(首次设置可留空)</span></label>
+                        <input type="password" id="old-password" placeholder="当前密码">
+                    </div>
+                    <div class="form-group">
+                        <label>新密码</label>
+                        <input type="password" id="new-password" placeholder="至少6位" minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label>确认新密码</label>
+                        <input type="password" id="confirm-new-password" placeholder="再次输入新密码">
+                    </div>
+                    <button type="submit" class="btn">更新密码</button>
+                    <div class="msg" id="password-msg"></div>
+                </form>
+            </div>
+        </div>
+
+        <!-- 活动记录 -->
+        <div class="section" id="sec-activities">
+            <div class="card">
+                <h3>游戏场次</h3>
+                <div id="sessions-list">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+            <div class="card">
+                <h3>我的文件</h3>
+                <div id="files-list">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 反馈 -->
+        <div class="section" id="sec-feedback">
+            <div class="card">
+                <h3>提交反馈</h3>
+                <form id="feedback-form">
+                    <div class="form-group">
+                        <label>反馈类型</label>
+                        <select id="feedback-type">
+                            <option value="suggestion">建议</option>
+                            <option value="bug">Bug 报告</option>
+                            <option value="reflection">游戏感想</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>内容</label>
+                        <textarea id="feedback-content" placeholder="请输入您的反馈内容..." required></textarea>
+                    </div>
+                    <button type="submit" class="btn">提交反馈</button>
+                    <div class="msg" id="feedback-msg"></div>
+                </form>
+            </div>
+        </div>
     </div>
 
-    <!-- 主内容 -->
-    <div id="main-content" style="display:none">
-      <!-- 头部 -->
-      <div class="my-header">
-        <button class="back-btn"
-          onclick="sessionStorage.setItem('skip_intro','true'); location.href = HOME_URL;">←</button>
-        <div class="avatar">👁️</div>
-        <p class="guardian-name" id="guardian-name">...</p>
-        <span class="level-badge level-initial" id="level-badge">🔵 初始守望者</span>
-        <br>
-        <button class="upgrade-btn" id="upgrade-btn" onclick="applyUpgrade()">申请升级</button>
-        <p id="upgrade-status" style="font-size:12px;margin-top:6px;opacity:0.8;display:none"></p>
-      </div>
+    <script>
+        // ===== Base path (staging support) =====
+        const HOME_URL = localStorage.getItem('wqt_home_url') || (window.location.pathname.startsWith('/staging/') ? '/staging/' : '/');
+        const API_BASE = localStorage.getItem('wqt_api_base') || (window.location.pathname.startsWith('/staging/') ? '/staging/api' : '/api');
 
-      <!-- Tab 导航 -->
-      <div class="tab-bar">
-        <button class="tab-btn active" onclick="switchTab('activities', this)">📅 我的活动</button>
-        <button class="tab-btn" onclick="switchTab('feedback', this)">💭 感想上传</button>
-        <button class="tab-btn" onclick="switchTab('bugreport', this)">🐛 系统反馈</button>
-      </div>
+        // ===== Auth =====
+        const token = localStorage.getItem('WQT_AUTH_TOKEN');
+        if (!token) { window.location.href = HOME_URL; }
 
-      <!-- 我的活动 -->
-      <div id="tab-activities" class="tab-content active">
-        <div id="activities-list">
-          <div class="empty-state">
-            <div class="icon">📅</div>
-            <p>加载中...</p>
-          </div>
-        </div>
-      </div>
+        // Set home link dynamically
+        document.getElementById('home-link').href = HOME_URL;
 
-      <!-- 感想上传 -->
-      <div id="tab-feedback" class="tab-content">
-        <div class="card">
-          <div class="card-title">分享你的收获与感想</div>
-          <p style="color:var(--text-muted);font-size:13px;margin:8px 0 16px">你的感想将提交给运营团队</p>
-          <label style="font-size:13px;color:var(--text-muted)">关联活动（可选）</label>
-          <select id="feedback-activity"
-            style="width:100%;background:rgba(255,255,255,0.06);border:1px solid var(--border);border-radius:8px;padding:10px;color:var(--text);margin:6px 0 12px;font-size:14px">
-            <option value="">不关联活动</option>
-          </select>
-          <textarea id="feedback-content" placeholder="写下你的感想与收获..."></textarea>
-          <button class="submit-btn" id="feedback-btn" onclick="submitFeedback('reflection')">提交感想</button>
-        </div>
-      </div>
+        async function api(path, options = {}) {
+            const url = path.startsWith('api/') ? API_BASE + path.slice(3) : HOME_URL + path;
+            const response = await fetch(url, {
+                method: options.method || 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: options.body ? JSON.stringify(options.body) : null
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+            return data;
+        }
 
-      <!-- 系统反馈 -->
-      <div id="tab-bugreport" class="tab-content">
-        <div class="card">
-          <div class="card-title">反馈问题或建议</div>
-          <p style="color:var(--text-muted);font-size:13px;margin:8px 0 16px">帮助我们改进系统</p>
-          <textarea id="bug-content" placeholder="描述你遇到的问题或建议..."></textarea>
-          <button class="submit-btn" id="bug-btn" onclick="submitFeedback('bug')">提交反馈</button>
-        </div>
-      </div>
-    </div>
-  </div>
+        function showMsg(el, text, type) {
+            el.textContent = text;
+            el.className = 'msg ' + type;
+            if (type === 'success') setTimeout(() => { el.textContent = ''; }, 3000);
+        }
 
-  <div id="toast"></div>
+        function formatTime(ms) {
+            if (!ms) return '-';
+            const d = new Date(typeof ms === 'string' ? ms : Number(ms));
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        }
 
-  <script>
-    const API_BASE = localStorage.getItem('wqt_api_base') || '/api';
-    const HOME_URL = localStorage.getItem('wqt_home_url') || '/';
-    let token = localStorage.getItem('WQT_AUTH_TOKEN') || sessionStorage.getItem('WQT_AUTH_TOKEN');
-    let userData = null;
-    let myActivities = [];
+        // ===== Tabs =====
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const sections = document.querySelectorAll('.section');
+        tabBtns.forEach(btn => {
+            btn.onclick = () => {
+                tabBtns.forEach(b => b.classList.remove('active'));
+                sections.forEach(s => s.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('sec-' + btn.dataset.tab).classList.add('active');
+            };
+        });
 
-    // 动态绑定"前往登录"按钮
-    document.getElementById('go-login-btn').onclick = () => location.href = HOME_URL;
-
-    const LEVEL_INFO = {
-      initial: { label: '🔵 初始守望者', cls: 'level-initial' },
-      advanced: { label: '🟡 进阶守望者', cls: 'level-advanced' },
-      mentor: { label: '🔴 导师级守望者', cls: 'level-mentor' },
-    };
-
-    function showToast(msg, color = '#4CAF50') {
-      const t = document.getElementById('toast');
-      t.textContent = msg; t.style.background = color; t.style.display = 'block';
-      setTimeout(() => t.style.display = 'none', 2500);
-    }
-
-    function switchTab(name, btn) {
-      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-      document.getElementById('tab-' + name).classList.add('active');
-      btn.classList.add('active');
-    }
-
-    function showLoginWall(msg) {
-      const wall = document.getElementById('login-wall');
-      wall.style.display = 'block';
-      if (msg) wall.querySelector('p').textContent = msg;
-    }
-
-    async function loadUser() {
-      if (!token) { showLoginWall(); return; }
-      try {
-        const res = await fetch(API_BASE + '/me', { headers: { Authorization: 'Bearer ' + token } });
-        if (!res.ok) {
-          if (res.status === 401) {
-            const err = await res.json().catch(() => ({}));
-            // 注意：不清除 token！避免返回首页时丢失登录状态
-            if (err.code === 'ENV_MISMATCH') {
-              showLoginWall('你已在其他环境登录，请重新登录');
-            } else {
-              showLoginWall('登录已过期，请重新登录');
+        // ===== Profile =====
+        async function loadProfile() {
+            try {
+                const { user } = await api('api/me');
+                document.getElementById('profile-info').innerHTML = `
+                    <div class="info-row"><span class="info-label">手机号</span><span class="info-value">${user.phone || '-'}</span></div>
+                    <div class="info-row"><span class="info-label">真实姓名</span><span class="info-value">${user.realName || '未设置'}</span></div>
+                    <div class="info-row"><span class="info-label">守望师名</span><span class="info-value">${user.guardianName || '未设置'}</span></div>
+                    <div class="info-row"><span class="info-label">角色</span><span class="info-value">${user.role}</span></div>
+                    <div class="info-row"><span class="info-label">组织</span><span class="info-value">${user.enterpriseId ? '已绑定 (ID:' + user.enterpriseId + ')' : '无'}</span></div>
+                `;
+                document.getElementById('edit-realname').value = user.realName || '';
+                document.getElementById('edit-guardian').value = user.guardianName || '';
+            } catch (e) {
+                document.getElementById('profile-info').innerHTML = `<div class="msg error">${e.message}</div>`;
             }
-          } else {
-            showLoginWall();
-          }
-          return;
         }
-        const data = await res.json();
-        userData = data.user;
-        document.getElementById('main-content').style.display = 'block';
-        renderProfile();
-        loadActivities();
-        loadUpgradeStatus();
-      } catch (e) {
-        showLoginWall();
-      }
-    }
 
-    function renderProfile() {
-      const u = userData;
-      document.getElementById('guardian-name').textContent = u.guardianName || u.username || '守望者';
-      const lvInfo = LEVEL_INFO[u.watcherLevel] || LEVEL_INFO.initial;
-      const badge = document.getElementById('level-badge');
-      badge.textContent = lvInfo.label;
-      badge.className = 'level-badge ' + lvInfo.cls;
-      // 导师级隐藏升级按钮
-      if (u.watcherLevel === 'mentor') {
-        document.getElementById('upgrade-btn').style.display = 'none';
-      }
-    }
+        document.getElementById('edit-profile-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const msgEl = document.getElementById('profile-msg');
+            const guardianName = document.getElementById('edit-guardian').value.trim();
+            const realName = document.getElementById('edit-realname').value.trim();
+            if (!guardianName && !realName) { showMsg(msgEl, '请至少填写一项', 'error'); return; }
+            try {
+                const body = {};
+                if (guardianName) body.guardianName = guardianName;
+                if (realName) body.realName = realName;
+                await api('api/me/profile', { method: 'PUT', body });
+                showMsg(msgEl, '保存成功', 'success');
+                loadProfile();
+            } catch (err) {
+                showMsg(msgEl, err.message, 'error');
+            }
+        };
 
-    async function loadUpgradeStatus() {
-      try {
-        const res = await fetch(API_BASE + '/me/level-application', { headers: { Authorization: 'Bearer ' + token } });
-        if (!res.ok) return;
-        const { application } = await res.json();
-        const statusEl = document.getElementById('upgrade-status');
-        const btn = document.getElementById('upgrade-btn');
-        if (application && application.status === 'pending') {
-          btn.disabled = true;
-          statusEl.textContent = '⏳ 升级申请审核中，请等待运营审批';
-          statusEl.style.display = 'block';
-        } else if (application && application.status === 'rejected') {
-          statusEl.textContent = `❌ 申请被驳回：${application.note || '请继续参与活动后重新申请'}`;
-          statusEl.style.display = 'block';
+        document.getElementById('password-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const msgEl = document.getElementById('password-msg');
+            const oldPassword = document.getElementById('old-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            const confirm = document.getElementById('confirm-new-password').value;
+            if (newPassword.length < 6) { showMsg(msgEl, '新密码至少6位', 'error'); return; }
+            if (newPassword !== confirm) { showMsg(msgEl, '两次密码不一致', 'error'); return; }
+            try {
+                const body = { newPassword };
+                if (oldPassword) body.oldPassword = oldPassword;
+                await api('api/me/password', { method: 'PUT', body });
+                showMsg(msgEl, '密码更新成功', 'success');
+                document.getElementById('password-form').reset();
+            } catch (err) {
+                showMsg(msgEl, err.message, 'error');
+            }
+        };
+
+        // ===== Sessions =====
+        async function loadSessions() {
+            const el = document.getElementById('sessions-list');
+            try {
+                const { sessions } = await api('api/me/sessions');
+                if (!sessions || sessions.length === 0) {
+                    el.innerHTML = '<div class="empty-state">暂无游戏记录</div>';
+                    return;
+                }
+                el.innerHTML = sessions.map(s => {
+                    const statusMap = { active: '进行中', auto_finished: '已自动结算', flagged: '已标记' };
+                    const statusText = statusMap[s.status] || '已完成';
+                    const scoreText = s.final_score != null ? s.final_score + ' 分' : (s.status === 'active' ? '进行中' : '未评分');
+                    return `
+                    <div class="session-item">
+                        <div class="session-header">
+                            <span class="session-date">${formatTime(s.started_at)}</span>
+                            <span class="session-score">${scoreText}</span>
+                        </div>
+                        <div class="session-meta">
+                            模式: ${s.game_mode || '标准'} | ${statusText}
+                            ${s.ended_at ? ' | 时长: ' + Math.round((s.ended_at - s.started_at) / 60000) + '分钟' : ''}
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                el.innerHTML = `<div class="msg error">${e.message}</div>`;
+            }
         }
-      } catch (e) { }
-    }
 
-    async function applyUpgrade() {
-      const btn = document.getElementById('upgrade-btn');
-      btn.disabled = true; btn.textContent = '提交中...';
-      try {
-        const res = await fetch(API_BASE + '/me/level-application', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reason: '我已参与多次活动，申请升级守望师等级' })
-        });
-        const data = await res.json();
-        if (res.ok) {
-          showToast('✅ 申请已提交，等待运营审批');
-          document.getElementById('upgrade-status').textContent = '⏳ 升级申请审核中...';
-          document.getElementById('upgrade-status').style.display = 'block';
-        } else {
-          showToast(data.error || '提交失败', '#f44336');
-          btn.disabled = false; btn.textContent = '申请升级';
+        // ===== Files =====
+        async function loadFiles() {
+            const el = document.getElementById('files-list');
+            try {
+                const { files } = await api('api/me/files');
+                if (!files || files.length === 0) {
+                    el.innerHTML = '<div class="empty-state">暂无文件</div>';
+                    return;
+                }
+                el.innerHTML = files.map(f => {
+                    const typeLabel = f.type === 'audio' ? '录音' : '报告';
+                    const typeClass = f.type === 'audio' ? 'audio' : 'report';
+                    return `
+                        <div class="file-item">
+                            <div>
+                                <span class="file-type ${typeClass}">${typeLabel}</span>
+                                <span style="margin-left:8px;font-size:13px;color:#555;">${formatTime(f.lastModified)}</span>
+                            </div>
+                            <a href="${f.url}" target="_blank">查看</a>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) {
+                el.innerHTML = `<div class="msg error">${e.message}</div>`;
+            }
         }
-      } catch (e) {
-        showToast('网络错误，请重试', '#f44336');
-        btn.disabled = false; btn.textContent = '申请升级';
-      }
-    }
 
-    async function loadActivities() {
-      try {
-        const res = await fetch(API_BASE + '/me/activities', { headers: { Authorization: 'Bearer ' + token } });
-        if (!res.ok) return;
-        const { activities } = await res.json();
-        myActivities = activities || [];
-        renderActivities();
-        populateActivitySelect();
-      } catch (e) { }
-    }
+        // ===== Feedback =====
+        document.getElementById('feedback-form').onsubmit = async (e) => {
+            e.preventDefault();
+            const msgEl = document.getElementById('feedback-msg');
+            const type = document.getElementById('feedback-type').value;
+            const content = document.getElementById('feedback-content').value.trim();
+            if (!content) { showMsg(msgEl, '请输入内容', 'error'); return; }
+            try {
+                await api('api/me/feedback', { method: 'POST', body: { type, content } });
+                showMsg(msgEl, '反馈已提交，感谢！', 'success');
+                document.getElementById('feedback-content').value = '';
+            } catch (err) {
+                showMsg(msgEl, err.message, 'error');
+            }
+        };
 
-    function renderActivities() {
-      const container = document.getElementById('activities-list');
-      if (!myActivities.length) {
-        container.innerHTML = '<div class="empty-state"><div class="icon">📅</div><p>暂无活动记录</p><p style="font-size:13px;color:var(--text-muted)">参与一场游戏后，活动记录将显示在这里</p></div>';
-        return;
-      }
-      container.innerHTML = myActivities.map(act => {
-        const date = act.session_started ? new Date(act.session_started).toLocaleDateString('zh-CN') : '--';
-        const score = act.final_score != null ? act.final_score : '--';
-        return `<div class="card">
-        <div class="card-title">${act.name || '独立游戏'}</div>
-        <div class="card-meta">📅 ${date}　🪑 第 ${act.table_no || '--'} 桌</div>
-        <div class="card-score">${score} <span style="font-size:14px;color:var(--text-muted);font-weight:normal">分</span></div>
-      </div>`;
-      }).join('');
-    }
+        // ===== Logout =====
+        document.getElementById('logout-btn').onclick = (e) => {
+            e.preventDefault();
+            localStorage.removeItem('WQT_AUTH_TOKEN');
+            localStorage.removeItem('WQT_USER_CACHE');
+            window.location.href = HOME_URL;
+        };
 
-    function populateActivitySelect() {
-      const sel = document.getElementById('feedback-activity');
-      myActivities.forEach(act => {
-        const opt = document.createElement('option');
-        opt.value = act.id || '';
-        opt.textContent = `${act.name || '游戏'} (${new Date(act.session_started || Date.now()).toLocaleDateString('zh-CN')})`;
-        sel.appendChild(opt);
-      });
-    }
-
-    async function submitFeedback(type) {
-      const isReflection = type === 'reflection';
-      const contentEl = document.getElementById(isReflection ? 'feedback-content' : 'bug-content');
-      const btnEl = document.getElementById(isReflection ? 'feedback-btn' : 'bug-btn');
-      const content = contentEl.value.trim();
-      if (!content) { showToast('请输入内容', '#FF9800'); return; }
-
-      btnEl.disabled = true; btnEl.textContent = '提交中...';
-      const body = { type, content };
-      if (isReflection) {
-        const actId = document.getElementById('feedback-activity').value;
-        if (actId) body.activity_id = Number(actId);
-      }
-
-      try {
-        const res = await fetch(API_BASE + '/me/feedback', {
-          method: 'POST',
-          headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        if (res.ok) {
-          showToast('✅ 已发送，感谢你的反馈！');
-          contentEl.value = '';
-        } else {
-          const err = await res.json();
-          showToast(err.error || '提交失败', '#f44336');
-        }
-      } catch (e) {
-        showToast('网络错误，请重试', '#f44336');
-      } finally {
-        btnEl.disabled = false;
-        btnEl.textContent = isReflection ? '提交感想' : '提交反馈';
-      }
-    }
-
-    // 初始化
-    loadUser();
-  </script>
+        // ===== Init =====
+        loadProfile();
+        loadSessions();
+        loadFiles();
+    </script>
 </body>
 
 </html>

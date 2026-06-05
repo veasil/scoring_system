@@ -166,8 +166,8 @@ class GlobalState {
     // 开始新游戏
     startNewGame() {
         this.resetGame();
-        this.state.gameStatus = 'playing';
         this.state.gameStarted = true;
+        this.setGameStatus('playing');
         this.notifyListeners('gameStarted', this.state);
     }
 

@@ -7,16 +7,19 @@
     return localStorage.getItem("WQT_AUTH_TOKEN") || "";
   }
 
+  // 会话 ID 用 sessionStorage（按标签页隔离），避免多标签页互相覆盖：
+  // 否则新标签页开新游戏会改写 localStorage 里的 WQT_SESSION_ID，
+  // 导致原标签页复盘时读到别的标签页的对局数据。
   function getSessionId() {
-    const cached = Number(localStorage.getItem("WQT_SESSION_ID"));
+    const cached = Number(sessionStorage.getItem("WQT_SESSION_ID"));
     return Number.isFinite(cached) && cached > 0 ? cached : null;
   }
 
   function setSessionId(sessionId) {
     if (sessionId) {
-      localStorage.setItem("WQT_SESSION_ID", String(sessionId));
+      sessionStorage.setItem("WQT_SESSION_ID", String(sessionId));
     } else {
-      localStorage.removeItem("WQT_SESSION_ID");
+      sessionStorage.removeItem("WQT_SESSION_ID");
     }
   }
 
@@ -339,7 +342,7 @@
   }
 
   async function uploadReport(html, markdown) {
-    return api("/api/upload/report", {
+    return api("api/upload/report", {
       method: "POST",
       body: { html, markdown }
     });
@@ -393,7 +396,7 @@
   }
 
   async function callLlm(prompt, { maxTokens = 1200, temperature = 0.7 } = {}) {
-    const ret = await api("/api/llm/story", {
+    const ret = await api("api/llm/story", {
       method: "POST",
       body: {
         prompt,
@@ -421,7 +424,7 @@
       renderStatus(target, "正在准备复盘数据...");
       let sessionId = getSessionId();
       if (!sessionId) {
-        const last = await api("/api/game/last-session");
+        const last = await api("api/game/last-session");
         sessionId = last?.session?.id || null;
         if (sessionId) setSessionId(sessionId);
       }
@@ -430,7 +433,21 @@
         return;
       }
 
-      const sessionData = await api(`/api/game/session/${sessionId}`);
+      let sessionData;
+      try {
+        sessionData = await api(`api/game/session/${sessionId}`);
+      } catch (e) {
+        // sessionId 可能已失效，尝试 fallback 到最近一局
+        setSessionId(null);
+        const last = await api("api/game/last-session");
+        sessionId = last?.session?.id || null;
+        if (!sessionId) {
+          renderStatus(target, "暂无可复盘的游戏记录。");
+          return;
+        }
+        setSessionId(sessionId);
+        sessionData = await api(`api/game/session/${sessionId}`);
+      }
       const session = sessionData.session;
       const events = sessionData.events || [];
       if (!session) {
@@ -440,9 +457,19 @@
 
       const reviewData = buildReviewData(session, events);
 
+      // 从系统设置获取最低卡牌数，默认 7
+      let minCards = 7;
+      try {
+        const settingsRes = await api("api/settings");
+        if (settingsRes.ok && settingsRes.settings) {
+          const row = settingsRes.settings.find(s => s.key === "REVIEW_MIN_CARDS");
+          if (row) minCards = Math.max(1, parseInt(row.value, 10) || 7);
+        }
+      } catch (_) { /* 拿不到就用默认值 */ }
+
       // 检查数据是否足够
-      if (reviewData.cards.length < 7) {
-        renderStatus(target, `数据不足：至少需要完成 7 张卡牌才能生成有意义的复盘报告。当前只有 ${reviewData.cards.length} 张卡牌。`);
+      if (reviewData.cards.length < minCards) {
+        renderStatus(target, `数据不足：至少需要完成 ${minCards} 张卡牌才能生成有意义的复盘报告。当前只有 ${reviewData.cards.length} 张卡牌。`);
         return;
       }
 
@@ -510,7 +537,7 @@
     const sessionId = getSessionId();
     if (!sessionId || !type) return;
     try {
-      await api("/api/game/event", {
+      await api("api/game/event", {
         method: "POST",
         body: { sessionId, type, payload }
       });
@@ -519,15 +546,15 @@
     }
   }
 
-  async function finishSession({ finalScore = 0, endedAt = Date.now(), payload = {} } = {}) {
+  async function finishSession({ finalScore = 0, endedAt = Date.now(), attributes = null, payload = {} } = {}) {
     const sessionId = getSessionId();
     if (!sessionId) return;
     try {
-      await api("/api/game/finish", {
+      const result = await api("api/game/finish", {
         method: "POST",
-        body: { sessionId, finalScore, endedAt, payload }
+        body: { sessionId, finalScore, endedAt, attributes, payload }
       });
-      await recordEvent("game_finish", { finalScore, endedAt, payload });
+      await recordEvent("game_finish", { finalScore, endedAt, scoreRate: result?.finalScore, scoreDetails: result?.scoreDetails, payload });
     } catch (error) {
       console.warn("结束游戏记录失败:", error.message);
     }

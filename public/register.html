@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>完善资料 - 伍力全开</title>
+    <title>注册 - 伍力全开</title>
     <style>
         body {
             font-family: 'Microsoft YaHei', sans-serif;
@@ -110,10 +110,26 @@
             line-height: 1.5;
         }
 
+        .hint a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .hint a:hover {
+            text-decoration: underline;
+        }
+
         .field-hint {
             color: #999;
             font-size: 12px;
             margin-top: 4px;
+        }
+
+        .invite-code-input {
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -121,25 +137,36 @@
 <body>
     <div class="container">
         <div class="logo">🎮</div>
-        <h1>欢迎加入伍力全开！</h1>
-        <p class="subtitle">请完善您的个人信息，即可开始游戏</p>
+        <h1>注册伍力全开</h1>
+        <p class="subtitle">请填写以下信息完成注册</p>
 
-        <form id="profile-form">
+        <form id="register-form">
+            <div class="form-group">
+                <label for="invite-code">邀请码 *</label>
+                <input type="text" id="invite-code" class="invite-code-input"
+                    placeholder="请输入邀请码" maxlength="20" required autocomplete="off">
+            </div>
+
+            <div class="form-group">
+                <label for="phone">手机号 *</label>
+                <input type="tel" id="phone" placeholder="请输入手机号" required autocomplete="tel">
+            </div>
+
             <div class="form-group">
                 <label for="real-name">真实姓名 *</label>
                 <input type="text" id="real-name" placeholder="请输入真实姓名" maxlength="20" required>
             </div>
 
             <div class="form-group">
-                <label for="guardian-name">守望师名 *</label>
-                <input type="text" id="guardian-name" placeholder="游戏中显示的昵称" maxlength="20" required>
+                <label for="nickname">守望师名 *</label>
+                <input type="text" id="nickname" placeholder="游戏中显示的昵称" maxlength="20" required>
                 <div class="field-hint">将用于游戏记录和复盘报告</div>
             </div>
 
             <div class="form-group">
-                <label for="password">设置密码 *</label>
+                <label for="password">密码 *</label>
                 <input type="password" id="password" placeholder="至少6位" minlength="6" required>
-                <div class="field-hint">设置密码后可用手机号+密码直接登录</div>
+                <div class="field-hint">密码至少需要6位字符</div>
             </div>
 
             <div class="form-group">
@@ -147,86 +174,68 @@
                 <input type="password" id="confirm-password" placeholder="再次输入密码" required>
             </div>
 
-            <button type="submit" class="btn" id="submit-btn">
-                完成设置，开始游戏
-            </button>
-
+            <button type="submit" class="btn" id="submit-btn">注册</button>
             <div id="error-message" class="error"></div>
         </form>
 
         <p class="hint">
-            信息仅用于游戏体验，不会对外公开
+            已有账号？<a href="/">返回登录</a>
         </p>
     </div>
 
     <script>
-        const form = document.getElementById('profile-form');
+        const form = document.getElementById('register-form');
         const submitBtn = document.getElementById('submit-btn');
         const errorMessage = document.getElementById('error-message');
-
-        // 检查登录状态
-        const token = localStorage.getItem('WQT_AUTH_TOKEN');
-        if (!token) {
-            alert('请先登录');
-            window.location.href = '/';
-        }
-
-        async function api(path, options = {}) {
-            const headers = {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            };
-
-            const response = await fetch(path, {
-                method: options.method || 'GET',
-                headers,
-                body: options.body ? JSON.stringify(options.body) : null
-            });
-
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ error: '请求失败' }));
-                throw new Error(error.error || `HTTP ${response.status}`);
-            }
-
-            return await response.json();
-        }
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             errorMessage.textContent = '';
 
+            const code = document.getElementById('invite-code').value.trim().toUpperCase();
+            const phone = document.getElementById('phone').value.trim();
             const realName = document.getElementById('real-name').value.trim();
-            const guardianName = document.getElementById('guardian-name').value.trim();
+            const nickname = document.getElementById('nickname').value.trim();
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm-password').value;
 
+            if (!code) { errorMessage.textContent = '请输入邀请码'; return; }
+            if (!phone) { errorMessage.textContent = '请输入手机号'; return; }
             if (!realName) { errorMessage.textContent = '请输入真实姓名'; return; }
-            if (!guardianName) { errorMessage.textContent = '请输入守望师名'; return; }
-            if (guardianName.length > 20) { errorMessage.textContent = '守望师名不超过20个字符'; return; }
+            if (!nickname) { errorMessage.textContent = '请输入守望师名'; return; }
             if (password.length < 6) { errorMessage.textContent = '密码至少需要6位'; return; }
             if (password !== confirmPassword) { errorMessage.textContent = '两次密码输入不一致'; return; }
 
             submitBtn.disabled = true;
-            submitBtn.textContent = '设置中...';
+            submitBtn.textContent = '注册中...';
 
             try {
-                const result = await api('api/auth/complete-profile', {
+                const response = await fetch('/api/auth/register-with-invite', {
                     method: 'POST',
-                    body: { guardianName, realName, password }
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, phone, realName, nickname, password })
                 });
 
-                localStorage.setItem('WQT_USER_INFO', JSON.stringify(result.user));
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || '注册失败');
+                }
 
-                submitBtn.textContent = '设置成功！';
+                // 保存登录状态，回到首页时自动登录
+                localStorage.setItem('WQT_AUTH_TOKEN', data.token);
+                if (data.user) {
+                    localStorage.setItem('WQT_USER_CACHE', JSON.stringify(data.user));
+                }
                 sessionStorage.setItem('skip_intro', 'true');
+
+                submitBtn.textContent = '注册成功！正在跳转...';
                 setTimeout(() => {
                     window.location.href = '/';
-                }, 1000);
-
-            } catch (error) {
-                errorMessage.textContent = error.message;
+                }, 1500);
+            } catch (err) {
+                errorMessage.textContent = err.message;
                 submitBtn.disabled = false;
-                submitBtn.textContent = '完成设置，开始游戏';
+                submitBtn.textContent = '注册';
             }
         });
 
@@ -234,9 +243,6 @@
         document.querySelectorAll('input').forEach(input => {
             input.addEventListener('input', () => { errorMessage.textContent = ''; });
         });
-
-        // 自动聚焦
-        document.getElementById('real-name').focus();
     </script>
 </body>
 
