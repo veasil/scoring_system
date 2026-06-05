@@ -476,6 +476,9 @@ app.post("/api/admin/organizations", authMiddleware, requireRole('boss'), async 
   try {
     // 检查手机号是否已关联其他组织
     const existingUser = await dbGet("SELECT id, enterprise_id, role FROM users WHERE phone = ?", [cleanPhone]);
+    if (existingUser && (existingUser.role === 'boss' || existingUser.role === 'operator')) {
+      return res.status(409).json({ error: "该账号已是系统管理员（boss/运营），不能作为组织管理员" });
+    }
     if (existingUser && existingUser.enterprise_id) {
       return res.status(409).json({ error: "该手机号已关联其他组织" });
     }
@@ -600,7 +603,7 @@ app.post("/api/admin/organizations/:id/members", authMiddleware, requireRole('bo
 app.post("/api/admin/invite-codes", authMiddleware, requireRole('boss'), async (req, res) => {
   const { maxUses, expiresInDays, organizationId } = req.body || {};
   try {
-    const code = generateInviteCode();
+    const code = await generateInviteCode();
     const expiresAt = Date.now() + (expiresInDays || 3) * 24 * 60 * 60 * 1000;
     const type = organizationId ? 'organization' : 'general';
     const result = await dbRun(
@@ -903,7 +906,7 @@ app.get("/api/enterprise/activities/:id/sessions", authMiddleware, requireEnterp
 app.post("/api/enterprise/invite-codes", authMiddleware, requireEnterprise, async (req, res) => {
   const { maxUses, expiresInDays } = req.body || {};
   try {
-    const code = generateInviteCode();
+    const code = await generateInviteCode();
     const expiresAt = Date.now() + (expiresInDays || 3) * 24 * 60 * 60 * 1000;
     const result = await dbRun(
       "INSERT INTO invite_codes(code, type, organization_id, created_by, max_uses, expires_at) VALUES(?,?,?,?,?,?)",
@@ -1916,9 +1919,37 @@ app.delete("/api/admin/oss/files", authMiddleware, async (req, res) => {
 
 // 生成活动码 ACT-001 格式
 async function generateActivityCode() {
-  const row = await dbGet("SELECT MAX(id) as maxId FROM activities");
-  const nextNum = (row?.maxId || 0) + 1;
-  return `ACT-${String(nextNum).padStart(3, '0')}`;
+  // 序号基于已有 activity_code 解析，而非 MAX(id)：
+  // id 自增序列在 SQLite→PG 迁移 / 行删除后会与 code 序号脱节，
+  // MAX(id)+1 可能撞到已存在的 code（违反 activities_activity_code_key 唯一约束）。
+  const rows = await dbAll("SELECT activity_code FROM activities WHERE activity_code LIKE 'ACT-%'");
+  let maxNum = 0;
+  for (const r of rows) {
+    const m = /^ACT-(\d+)$/.exec(r.activity_code || "");
+    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
+  }
+  // 从 maxNum+1 起逐个尝试，校验唯一后返回（防御历史脏数据 / 并发碰撞）
+  for (let n = maxNum + 1; n < maxNum + 1000; n++) {
+    const code = `ACT-${String(n).padStart(3, '0')}`;
+    const exists = await dbGet("SELECT id FROM activities WHERE activity_code = ?", [code]);
+    if (!exists) return code;
+  }
+  // 极端兜底：时间戳后缀保证唯一
+  return `ACT-${Date.now().toString(36).toUpperCase()}`;
+}
+
+// 生成唯一邀请码：8 位大写字母+数字（去掉易混淆的 0/O/1/I），与 invite_codes.code 去重
+async function generateInviteCode() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const bytes = crypto.randomBytes(8);
+    let code = "";
+    for (let i = 0; i < 8; i++) code += alphabet[bytes[i] % alphabet.length];
+    const exists = await dbGet("SELECT id FROM invite_codes WHERE code = ?", [code]);
+    if (!exists) return code;
+  }
+  // 极小概率连续碰撞，回退加时间戳后缀保证唯一
+  return `INV${Date.now().toString(36).toUpperCase()}`;
 }
 
 app.get("/api/admin/activities", authMiddleware, async (req, res) => {
