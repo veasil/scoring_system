@@ -40,6 +40,7 @@ class SQLiteCardsSource extends ICardsSource {
         options_json TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
         version INTEGER DEFAULT 1,
+        attribute_reason TEXT,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
         updated_at INTEGER,
         deleted_at INTEGER
@@ -59,9 +60,45 @@ class SQLiteCardsSource extends ICardsSource {
         status TEXT DEFAULT 'pending',
         version INTEGER DEFAULT 1,
         version_label TEXT,
+        attribute_reason TEXT,
+        author_id INTEGER,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
       );
     `);
+
+        // 创建游戏发布快照表（前端读取）
+        await this.run(`
+      CREATE TABLE IF NOT EXISTS cards_released (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        card_id INTEGER NOT NULL,
+        key INTEGER NOT NULL,
+        safety_type TEXT NOT NULL,
+        event TEXT NOT NULL,
+        phase TEXT,
+        options_json TEXT NOT NULL,
+        audio_url TEXT,
+        version_label TEXT,
+        attribute_reason TEXT,
+        from_version_id INTEGER,
+        released_by INTEGER,
+        released_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000)
+      );
+    `);
+
+        // 创建卡牌组表（按版本/套装组织发布快照）
+        await this.run(`
+      CREATE TABLE IF NOT EXISTS card_groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        description TEXT,
+        released_ids_json TEXT NOT NULL,
+        is_default INTEGER DEFAULT 0,
+        created_by INTEGER,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s','now')*1000),
+        updated_at INTEGER
+      );
+    `);
+        await this.run(`CREATE INDEX IF NOT EXISTS idx_card_groups_default ON card_groups(is_default);`);
 
         // 向后兼容：添加可能缺失的列
         const missingColumns = [
@@ -74,12 +111,55 @@ class SQLiteCardsSource extends ICardsSource {
             { name: 'parent_id', def: 'INTEGER' },
             { name: 'notes', def: 'TEXT' },
             { name: 'version_label', def: 'TEXT' },
-            { name: 'audio_url', def: 'TEXT' }
+            { name: 'audio_url', def: 'TEXT' },
+            { name: 'current_version_id', def: 'INTEGER' },
+            { name: 'author_id', def: 'INTEGER' },
+            { name: 'attribute_reason', def: 'TEXT' }
+        ];
+
+        const missingVersionColumns = [
+            { name: 'author_id', def: 'INTEGER' },
+            { name: 'audio_url', def: 'TEXT' },
+            { name: 'note', def: 'TEXT' },
+            { name: 'branch', def: 'TEXT DEFAULT "main"' },
+            { name: 'parent_id', def: 'INTEGER' },
+            { name: 'promoted_at', def: 'INTEGER' },
+            { name: 'attribute_reason', def: 'TEXT' }
         ];
 
         for (const col of missingColumns) {
             try {
                 await this.run(`ALTER TABLE cards ADD COLUMN ${col.name} ${col.def}`);
+            } catch (e) {
+                // 列已存在，忽略错误
+            }
+        }
+
+        for (const col of missingVersionColumns) {
+            try {
+                await this.run(`ALTER TABLE card_versions ADD COLUMN ${col.name} ${col.def}`);
+            } catch (e) {
+                // 列已存在，忽略错误
+            }
+        }
+
+        // card_groups 表补全缺失列
+        const missingGroupColumns = [
+            { name: 'max_scores_json', def: 'TEXT' }
+        ];
+        for (const col of missingGroupColumns) {
+            try {
+                await this.run(`ALTER TABLE card_groups ADD COLUMN ${col.name} ${col.def}`);
+            } catch (e) { /* 列已存在 */ }
+        }
+
+        const missingReleasedColumns = [
+            { name: 'attribute_reason', def: 'TEXT' }
+        ];
+
+        for (const col of missingReleasedColumns) {
+            try {
+                await this.run(`ALTER TABLE cards_released ADD COLUMN ${col.name} ${col.def}`);
             } catch (e) {
                 // 列已存在，忽略错误
             }

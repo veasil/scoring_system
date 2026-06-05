@@ -33,6 +33,24 @@ export function decryptVal(val) {
   }
 }
 
+// AES-256-CBC 加密（与 decryptVal / admin-panel/db_utils.py 的 encrypt_val 格式逐字节一致：
+// "enc:" + base64(iv) + ":" + base64(ciphertext)，PKCS7 padding）。
+// 无 key 或空值时原样返回（与 Python 行为一致）。
+export function encryptVal(value) {
+  const keyHex = process.env.SETTINGS_ENCRYPTION_KEY;
+  if (!keyHex || value === null || value === undefined || value === "") return value;
+  try {
+    const key = Buffer.from(keyHex, "hex");
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+    const ciphertext = Buffer.concat([cipher.update(String(value), "utf-8"), cipher.final()]);
+    return `enc:${iv.toString("base64")}:${ciphertext.toString("base64")}`;
+  } catch (e) {
+    console.error("Encryption failed:", e.message);
+    return value;
+  }
+}
+
 // 从数据库加载 system_settings 并合并到 config（数据库值优先于 process.env）。
 // 必须在 initDb() 之后调用。
 export async function loadConfig() {

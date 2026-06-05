@@ -18,6 +18,7 @@ import { requireRole, requireEnterprise } from "./src/middleware/rbac.js";
 import { normalizePhone, initSms } from "./src/services/sms.js";
 import authRouter from "./src/routes/auth.routes.js";
 import accountAdminRouter from "./src/routes/account-admin.routes.js";
+import adminDataRouter from "./src/routes/admin-data.routes.js";
 
 dotenv.config();
 
@@ -193,6 +194,14 @@ app.use("/enterprise", express.static(enterpriseDist));
 app.get("/enterprise/*", (req, res, next) => {
   if (req.path.startsWith("/enterprise/api")) return next();
   res.sendFile(path.join(enterpriseDist, "index.html"), err => { if (err) next(); });
+});
+
+// 中台管理前端 SPA（admin-web，替代 Streamlit）
+const adminWebDist = path.join(__dirname, "admin-web", "dist");
+app.use("/admin", express.static(adminWebDist));
+app.get("/admin/*", (req, res, next) => {
+  if (req.path.startsWith("/admin/api")) return next();
+  res.sendFile(path.join(adminWebDist, "index.html"), err => { if (err) next(); });
 });
 
 
@@ -632,7 +641,9 @@ app.get("/api/enterprise/info", authMiddleware, requireEnterprise, async (req, r
         description: req.org.description,
         maxMembers: req.org.max_members,
         currentMembers: memberCount.cnt,
-        createdAt: req.org.created_at
+        createdAt: req.org.created_at,
+        validUntil: req.org.valid_until,
+        status: req.org.status
       }
     });
   } catch (e) {
@@ -2380,6 +2391,7 @@ app.post("/api/admin/cards/:id/release", authMiddleware, async (req, res) => {
 // ======== 登录 / 账号资产模块路由（已抽出到 src/routes/）========
 app.use(authRouter);
 app.use(accountAdminRouter);
+app.use(adminDataRouter);
 
 // ======== 定时清理过期/废弃游戏场次 ========
 const SESSION_EXPIRE_MS = 3 * 60 * 60 * 1000; // 3小时
