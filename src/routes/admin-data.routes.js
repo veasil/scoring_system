@@ -30,11 +30,11 @@ router.get("/api/admin/stats/overview", boss, async (req, res) => {
     // 近 14 天每日新增用户 / 场次（created_at / started_at 为毫秒时间戳）
     const since = Date.now() - 14 * 86400_000;
     const dailySignups = await dbAll(
-      "SELECT date(created_at/1000,'unixepoch','+8 hours') d, COUNT(*) c FROM users WHERE created_at >= ? GROUP BY d ORDER BY d",
+      "SELECT to_char(to_timestamp(created_at/1000) AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') d, COUNT(*) c FROM users WHERE created_at >= ? GROUP BY d ORDER BY d",
       [since]
     );
     const dailySessions = await dbAll(
-      "SELECT date(started_at/1000,'unixepoch','+8 hours') d, COUNT(*) c FROM game_sessions WHERE started_at >= ? GROUP BY d ORDER BY d",
+      "SELECT to_char(to_timestamp(started_at/1000) AT TIME ZONE 'Asia/Shanghai','YYYY-MM-DD') d, COUNT(*) c FROM game_sessions WHERE started_at >= ? GROUP BY d ORDER BY d",
       [since]
     );
     res.json({ totalUsers, usersByRole, totalSessions, sessionsByStatus, totalOrgs, dailySignups, dailySessions });
