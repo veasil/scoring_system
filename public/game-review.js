@@ -97,6 +97,10 @@
         choice: payload.choice || "",
         optionText: payload.optionText || "",
         consequence: payload.consequence || "",
+        reason: payload.reason || "",
+        allOptions: payload.allOptions || null,
+        subtopic: payload.subtopic || "",
+        whitepaperRef: payload.whitepaperRef || "",
         timeSpentSec: payload.timeSpentSec ?? null,
         attributeDelta: delta,
         attributesBefore: before,
@@ -165,18 +169,29 @@
       endedAt: data.session.endedAt,
       duration: formatDurationMs(data.durationMs),
       finalScore: data.session.finalScore,
-      cards: data.cards.map((card) => ({
-        cardId: card.cardId,
-        phase: card.phase,
-        event: card.eventText,
-        choice: card.choice,
-        optionText: card.optionText,
-        consequence: card.consequence,
-        delta: card.attributeDelta,
-        timeSpentSec: card.timeSpentSec,
-        wasFailure: card.wasFailure,
-        isCreativeOption: card.isCreativeOption
-      })),
+      cards: data.cards.map((card) => {
+        // 未选选项的理由（用于“本可以怎么选”的对比分析）
+        let alternatives = null;
+        if (card.allOptions) {
+          alternatives = Object.entries(card.allOptions)
+            .filter(([k]) => k !== card.choice)
+            .map(([k, o]) => ({ option: k, text: o.text, reason: o.reason || "" }));
+        }
+        return {
+          cardId: card.cardId,
+          phase: card.phase,
+          event: card.eventText,
+          choice: card.choice,
+          optionText: card.optionText,
+          consequence: card.consequence,
+          chosenReason: card.reason || "",
+          alternatives,
+          delta: card.attributeDelta,
+          timeSpentSec: card.timeSpentSec,
+          wasFailure: card.wasFailure,
+          isCreativeOption: card.isCreativeOption
+        };
+      }),
       skills: data.skills.map((skill) => ({
         skill: skill.skill,
         cardId: skill.cardId,
@@ -214,6 +229,7 @@
       "- decisionPatterns: 决策模式（选择倾向、反应时间、技能使用策略等）",
       "- growthHighlights: 成长亮点（技能使用、创新选择、属性提升等）",
       "- reflectionPoints: 值得反思的点（可改进之处、学习机会等）",
+      "- 每张卡含 chosenReason（所选选项的五力理由）与 alternatives（未选选项及其理由）；分析时请对比“所选 vs 本可以怎么选”，据此点出决策得失与更优路径。",
       "- 结合玩家信息（地点、人数等）进行情境化分析。",
       "",
       "游戏数据：",

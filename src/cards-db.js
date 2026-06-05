@@ -49,6 +49,13 @@ class PostgresCardsSource extends ICardsSource {
         parent_id BIGINT,
         current_version_id BIGINT,
         author_id BIGINT,
+        card_code TEXT,
+        workbench TEXT DEFAULT '经典版',
+        title TEXT,
+        guide_text TEXT,
+        subtopic TEXT,
+        whitepaper_ref TEXT,
+        trainer_material_json TEXT,
         created_at BIGINT NOT NULL DEFAULT ${NOW_MS},
         updated_at BIGINT,
         deleted_at BIGINT
@@ -74,6 +81,13 @@ class PostgresCardsSource extends ICardsSource {
         branch TEXT DEFAULT 'main',
         parent_id BIGINT,
         promoted_at BIGINT,
+        card_code TEXT,
+        workbench TEXT,
+        title TEXT,
+        guide_text TEXT,
+        subtopic TEXT,
+        whitepaper_ref TEXT,
+        trainer_material_json TEXT,
         created_at BIGINT NOT NULL DEFAULT ${NOW_MS}
       );
     `);
@@ -90,6 +104,9 @@ class PostgresCardsSource extends ICardsSource {
         audio_url TEXT,
         version_label TEXT,
         attribute_reason TEXT,
+        card_code TEXT,
+        title TEXT,
+        guide_text TEXT,
         from_version_id BIGINT,
         released_by BIGINT,
         released_at BIGINT NOT NULL DEFAULT ${NOW_MS}
@@ -110,6 +127,33 @@ class PostgresCardsSource extends ICardsSource {
       );
     `);
         await this.run(`CREATE INDEX IF NOT EXISTS idx_card_groups_default ON card_groups(is_default);`);
+
+        // 向后兼容：为已存在的表补 2026 卡牌包新增列（PG 9.6+ 支持 IF NOT EXISTS）
+        const pgAdds = [
+            ["cards", "card_code TEXT"],
+            ["cards", "workbench TEXT DEFAULT '经典版'"],
+            ["cards", "title TEXT"],
+            ["cards", "guide_text TEXT"],
+            ["cards", "subtopic TEXT"],
+            ["cards", "whitepaper_ref TEXT"],
+            ["cards", "trainer_material_json TEXT"],
+            ["card_versions", "card_code TEXT"],
+            ["card_versions", "workbench TEXT"],
+            ["card_versions", "title TEXT"],
+            ["card_versions", "guide_text TEXT"],
+            ["card_versions", "subtopic TEXT"],
+            ["card_versions", "whitepaper_ref TEXT"],
+            ["card_versions", "trainer_material_json TEXT"],
+            ["cards_released", "card_code TEXT"],
+            ["cards_released", "title TEXT"],
+            ["cards_released", "guide_text TEXT"],
+        ];
+        for (const [table, def] of pgAdds) {
+            try { await this.run(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${def}`); }
+            catch (e) { /* 列已存在或不支持，忽略 */ }
+        }
+        // 现有卡牌归入「经典版」工作台
+        try { await this.run(`UPDATE cards SET workbench='经典版' WHERE workbench IS NULL`); } catch (e) {}
 
         console.log(`✅ [PostgreSQL] Cards database initialized`);
     }
@@ -220,7 +264,14 @@ class SQLiteCardsSource extends ICardsSource {
             { name: 'audio_url', def: 'TEXT' },
             { name: 'current_version_id', def: 'INTEGER' },
             { name: 'author_id', def: 'INTEGER' },
-            { name: 'attribute_reason', def: 'TEXT' }
+            { name: 'attribute_reason', def: 'TEXT' },
+            { name: 'card_code', def: 'TEXT' },
+            { name: 'workbench', def: 'TEXT DEFAULT "经典版"' },
+            { name: 'title', def: 'TEXT' },
+            { name: 'guide_text', def: 'TEXT' },
+            { name: 'subtopic', def: 'TEXT' },
+            { name: 'whitepaper_ref', def: 'TEXT' },
+            { name: 'trainer_material_json', def: 'TEXT' }
         ];
 
         const missingVersionColumns = [
@@ -230,7 +281,14 @@ class SQLiteCardsSource extends ICardsSource {
             { name: 'branch', def: 'TEXT DEFAULT "main"' },
             { name: 'parent_id', def: 'INTEGER' },
             { name: 'promoted_at', def: 'INTEGER' },
-            { name: 'attribute_reason', def: 'TEXT' }
+            { name: 'attribute_reason', def: 'TEXT' },
+            { name: 'card_code', def: 'TEXT' },
+            { name: 'workbench', def: 'TEXT' },
+            { name: 'title', def: 'TEXT' },
+            { name: 'guide_text', def: 'TEXT' },
+            { name: 'subtopic', def: 'TEXT' },
+            { name: 'whitepaper_ref', def: 'TEXT' },
+            { name: 'trainer_material_json', def: 'TEXT' }
         ];
 
         for (const col of missingColumns) {
@@ -260,7 +318,10 @@ class SQLiteCardsSource extends ICardsSource {
         }
 
         const missingReleasedColumns = [
-            { name: 'attribute_reason', def: 'TEXT' }
+            { name: 'attribute_reason', def: 'TEXT' },
+            { name: 'card_code', def: 'TEXT' },
+            { name: 'title', def: 'TEXT' },
+            { name: 'guide_text', def: 'TEXT' }
         ];
 
         for (const col of missingReleasedColumns) {
@@ -270,6 +331,9 @@ class SQLiteCardsSource extends ICardsSource {
                 // 列已存在，忽略错误
             }
         }
+
+        // 现有卡牌归入「经典版」工作台
+        try { await this.run(`UPDATE cards SET workbench='经典版' WHERE workbench IS NULL`); } catch (e) {}
 
         console.log(`✅ [SQLite] Cards database initialized: ${this.dbPath}`);
     }
