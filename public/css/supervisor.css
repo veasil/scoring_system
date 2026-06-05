@@ -177,6 +177,39 @@
     line-height: 1.4;
 }
 
+/* 五力理由：内联可展开 */
+.history-reason-detail {
+    margin-top: 4px;
+}
+.history-reason-detail > summary {
+    font-size: 0.78rem;
+    color: rgba(255, 255, 255, 0.75);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+.history-reason-detail > summary::-webkit-details-marker {
+    display: none;
+}
+.history-reason-detail > summary::before {
+    content: '▸ ';
+    color: rgba(255, 255, 255, 0.5);
+}
+.history-reason-detail[open] > summary::before {
+    content: '▾ ';
+}
+.history-reason-body {
+    font-size: 0.76rem;
+    color: rgba(255, 255, 255, 0.62);
+    margin-top: 4px;
+    line-height: 1.5;
+    white-space: pre-line;
+    padding: 6px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-left: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+}
+
 /* 属性控制面板 */
 .attributes-controls {
     display: grid;

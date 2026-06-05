@@ -1062,12 +1062,15 @@ function formatReleasedCard(c) {
   return {
     id: c.card_id,
     key: c.key,
+    card_code: c.card_code || null,
     safetyType: c.safety_type,
     event: c.event,
     phase: c.phase,
     status: 'released',
     audio_url: c.audio_url || null,
     attribute_reason: c.attribute_reason || null,
+    title: c.title || null,
+    guide_text: c.guide_text || null,
     options: JSON.parse(c.options_json)
   };
 }
@@ -1218,10 +1221,11 @@ async function resolveReleasedIdsFromCardIds(cardIds, releasedBy, label) {
     // 新建快照
     const ins = await cardsDbRun(
       `INSERT INTO cards_released
-       (card_id, key, safety_type, event, phase, options_json, audio_url, attribute_reason, version_label, from_version_id, released_by, released_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (card_id, key, safety_type, event, phase, options_json, audio_url, attribute_reason, card_code, title, guide_text, version_label, from_version_id, released_by, released_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [card.id, card.key, card.safety_type, card.event, card.phase, card.options_json,
-       card.audio_url, card.attribute_reason, label || (card.version_label || `v${card.version || 1}版`),
+       card.audio_url, card.attribute_reason, card.card_code, card.title, card.guide_text,
+       label || (card.version_label || `v${card.version || 1}版`),
        card.current_version_id, releasedBy, now]
     );
     out.push(ins.lastID);
@@ -1358,12 +1362,19 @@ app.get("/api/admin/cards", authMiddleware, async (req, res) => {
     const formattedCards = cards.map(c => ({
       id: c.id,
       key: c.key,
+      card_code: c.card_code || null,
+      workbench: c.workbench || '经典版',
       safetyType: c.safety_type,
       event: c.event,
       phase: c.phase,
       status: c.status,
       audio_url: c.audio_url || null,
       attribute_reason: c.attribute_reason || null,
+      title: c.title || null,
+      guide_text: c.guide_text || null,
+      subtopic: c.subtopic || null,
+      whitepaper_ref: c.whitepaper_ref || null,
+      trainer_material: (() => { try { return c.trainer_material_json ? JSON.parse(c.trainer_material_json) : null; } catch { return null; } })(),
       notes: c.notes || '[]',
       current_version_id: c.current_version_id || null,
       author_id: c.author_id || null,
@@ -1483,17 +1494,30 @@ app.post("/api/cards", authMiddleware, async (req, res) => {
     const createdAt = Date.now();
 
     const attributeReason = card.attributeReason || null;
+    // 2026 卡牌包新增字段
+    const cardCode = card.card_code || null;
+    const workbench = card.workbench || '经典版';
+    const title = card.title || null;
+    const guideText = card.guide_text || null;
+    const subtopic = card.subtopic || null;
+    const whitepaperRef = card.whitepaper_ref || null;
+    const trainerMaterialJson = card.trainer_material ? JSON.stringify(card.trainer_material) : null;
 
     const result = await cardsDbRun(
-      `INSERT INTO cards (key, safety_type, event, phase, options_json, attribute_reason, status, version, created_at, updated_at, author_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [key, card.safetyType, card.event, card.phase, optionsJson, attributeReason, status, version, createdAt, createdAt, req.user.uid]
+      `INSERT INTO cards (key, safety_type, event, phase, options_json, attribute_reason, status, version, created_at, updated_at, author_id,
+         card_code, workbench, title, guide_text, subtopic, whitepaper_ref, trainer_material_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [key, card.safetyType, card.event, card.phase, optionsJson, attributeReason, status, version, createdAt, createdAt, req.user.uid,
+        cardCode, workbench, title, guideText, subtopic, whitepaperRef, trainerMaterialJson]
     );
 
     // 同时在 card_versions 建初版
     const versionResult = await cardsDbRun(
-      `INSERT INTO card_versions (card_id, key, safety_type, event, phase, options_json, attribute_reason, version, version_label, author_id, branch, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [result.lastID, key, card.safetyType, card.event, card.phase, optionsJson, attributeReason, 1, 'v1-初版', req.user.uid, 'main', createdAt]
+      `INSERT INTO card_versions (card_id, key, safety_type, event, phase, options_json, attribute_reason, version, version_label, author_id, branch, created_at,
+         card_code, workbench, title, guide_text, subtopic, whitepaper_ref, trainer_material_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [result.lastID, key, card.safetyType, card.event, card.phase, optionsJson, attributeReason, 1, 'v1-初版', req.user.uid, 'main', createdAt,
+        cardCode, workbench, title, guideText, subtopic, whitepaperRef, trainerMaterialJson]
     );
 
     // 回写 current_version_id
@@ -1524,6 +1548,17 @@ app.put("/api/cards/:id", authMiddleware, async (req, res) => {
     const attributeReason = updates.attributeReason !== undefined ? (updates.attributeReason || null) : existing.attribute_reason;
     const updatedAt = Date.now();
 
+    // 2026 卡牌包新增字段（未传则保留原值）
+    const cardCode = updates.card_code !== undefined ? (updates.card_code || null) : existing.card_code;
+    const workbench = updates.workbench !== undefined ? (updates.workbench || '经典版') : existing.workbench;
+    const title = updates.title !== undefined ? (updates.title || null) : existing.title;
+    const guideText = updates.guide_text !== undefined ? (updates.guide_text || null) : existing.guide_text;
+    const subtopic = updates.subtopic !== undefined ? (updates.subtopic || null) : existing.subtopic;
+    const whitepaperRef = updates.whitepaper_ref !== undefined ? (updates.whitepaper_ref || null) : existing.whitepaper_ref;
+    const trainerMaterialJson = updates.trainer_material !== undefined
+      ? (updates.trainer_material ? JSON.stringify(updates.trainer_material) : null)
+      : existing.trainer_material_json;
+
     let deletedAt = existing.deleted_at;
     if (status === 'deleted' && existing.status !== 'deleted') {
       deletedAt = Date.now();
@@ -1532,8 +1567,10 @@ app.put("/api/cards/:id", authMiddleware, async (req, res) => {
     }
 
     await cardsDbRun(
-      `UPDATE cards SET safety_type=?, event=?, phase=?, options_json=?, status=?, audio_url=?, attribute_reason=?, updated_at=?, deleted_at=? WHERE id=?`,
-      [safetyType, event, phase, optionsJson, status, audioUrl, attributeReason, updatedAt, deletedAt, id]
+      `UPDATE cards SET safety_type=?, event=?, phase=?, options_json=?, status=?, audio_url=?, attribute_reason=?, updated_at=?, deleted_at=?,
+         card_code=?, workbench=?, title=?, guide_text=?, subtopic=?, whitepaper_ref=?, trainer_material_json=? WHERE id=?`,
+      [safetyType, event, phase, optionsJson, status, audioUrl, attributeReason, updatedAt, deletedAt,
+        cardCode, workbench, title, guideText, subtopic, whitepaperRef, trainerMaterialJson, id]
     );
 
     res.json({ ok: true, id, status });
@@ -2409,10 +2446,11 @@ app.post("/api/admin/cards/:id/release", authMiddleware, async (req, res) => {
     const label = req.body?.version_label || `发布于${new Date().toISOString().slice(0, 10)}`;
 
     await cardsDbRun(
-      `INSERT INTO cards_released (card_id, key, safety_type, event, phase, options_json, audio_url, attribute_reason, version_label, from_version_id, released_by, released_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO cards_released (card_id, key, safety_type, event, phase, options_json, audio_url, attribute_reason, card_code, title, guide_text, version_label, from_version_id, released_by, released_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [card.id, card.key, card.safety_type, card.event, card.phase, card.options_json,
-        card.audio_url, card.attribute_reason, label, card.current_version_id, req.user.uid, now]
+        card.audio_url, card.attribute_reason, card.card_code, card.title, card.guide_text,
+        label, card.current_version_id, req.user.uid, now]
     );
 
     res.json({ ok: true, card_id: card.id, key: card.key });

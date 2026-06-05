@@ -322,7 +322,9 @@ class SupervisorController {
                         <div class="history-action">${content}</div>
                         ${entry.cardData ? `<div class="history-event">${entry.cardData.safetyType}</div>` : ''}
                         <div class="history-changes ${changes !== '无变化' ? 'has-changes' : ''}">${changes}</div>
-                        ${entry.cardData?.attribute_reason ? `<div class="history-reason">💡 ${entry.cardData.attribute_reason}</div>` : ''}
+                        ${entry.optionData?.reason
+                            ? `<details class="history-reason-detail"><summary>💡 五力理由</summary><div class="history-reason-body">${entry.optionData.reason}</div></details>`
+                            : (entry.cardData?.attribute_reason ? `<div class="history-reason">💡 ${entry.cardData.attribute_reason}</div>` : '')}
                     </div>
                 </div>
             `;

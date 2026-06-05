@@ -543,6 +543,30 @@
                 return;
             }
 
+            // 2026 卡牌包：若当前组卡牌带 card_code，输入框改为文本、按编号匹配
+            const cardsHaveCode = window.CARD_DATA.some(c => c.card_code);
+            (function adaptCardInput() {
+                const inp = document.getElementById('card-number');
+                if (cardsHaveCode && inp) {
+                    inp.type = 'text';
+                    inp.removeAttribute('min');
+                    inp.removeAttribute('max');
+                    inp.placeholder = '输入卡牌编号，如 2026B01';
+                }
+            })();
+
+            // 把用户输入解析为卡牌：优先 card_code（忽略大小写），回退数字 id（经典卡）
+            function findCardByInput(raw) {
+                if (raw == null) return null;
+                const s = String(raw).trim();
+                if (!s) return null;
+                let card = window.CARD_DATA.find(c => c.card_code && String(c.card_code).toLowerCase() === s.toLowerCase());
+                if (card) return card;
+                const n = parseInt(s, 10);
+                if (!isNaN(n)) card = window.CARD_DATA.find(c => c.id === n);
+                return card || null;
+            }
+
             let selectedChoice = null;
             let timerInterval = null;
             let hasStartedNewGame = false; // 跟踪是否已按新游戏
@@ -1203,6 +1227,8 @@
                             alert('请先填写卡牌编号！');
                             return;
                         }
+                        const skillCard = findCardByInput(cardNum);
+                        const recId = skillCard ? skillCard.id : cardNum;
 
                         // 弹出输入框让用户填写选项D
                         const optionD = prompt('请填写你的选项D：');
@@ -1218,11 +1244,12 @@
                         playSound('upgrade'); // 播放升级声效
 
                         // 保存选项D用于复盘
-                        creativeOptions[cardNum] = optionD;
+                        creativeOptions[recId] = optionD;
 
                         // 记录技能使用到操作历史
                         const skillHistoryEntry = {
-                            cardId: parseInt(cardNum),
+                            cardId: recId,
+                            cardCode: skillCard ? (skillCard.card_code || null) : null,
                             selectedOption: 'SKILL',
                             cardData: null,
                             optionData: {
@@ -1242,7 +1269,7 @@
                         // 记录技能使用
                         gameAnalytics.skillUsage.push({
                             skill: '创心力',
-                            cardId: cardNum,
+                            cardId: recId,
                             timestamp: new Date(),
                             optionD: optionD,
                             attributeChange: { '创心力': 1 }
@@ -1250,7 +1277,7 @@
                         if (window.GameReview && window.GameReview.recordEvent) {
                             window.GameReview.recordEvent('skill_use', {
                                 skill,
-                                cardId: cardNum,
+                                cardId: recId,
                                 optionD,
                                 attributesBefore: attrsBefore,
                                 attributesAfter: attrsAfter,
@@ -1263,11 +1290,12 @@
 
                         if (chooseD) {
                             // 选择选项D，直接给出反馈，不需要再选ABC
-                            const card = window.CARD_DATA.find(c => c.id === parseInt(cardNum));
+                            const card = skillCard;
                             if (card) {
                                 // 记录选择D的历史
                                 const historyEntry = {
-                                    cardId: parseInt(cardNum),
+                                    cardId: recId,
+                                    cardCode: card.card_code || null,
                                     selectedOption: 'D',
                                     cardData: card,
                                     optionData: { text: optionD, consequence: '你选择了创新的解决方案！' },
@@ -1290,7 +1318,8 @@
                                 // 记录事件
                                 if (window.GameReview && window.GameReview.recordEvent) {
                                     window.GameReview.recordEvent('card_choice', {
-                                        cardId: parseInt(cardNum, 10),
+                                        cardId: recId,
+                                        cardCode: card.card_code || null,
                                         phase: card.phase,
                                         eventText: card.event,
                                         choice: 'D',
@@ -1306,7 +1335,7 @@
 
                                 // 显示反馈
                                 document.getElementById('choice-display').innerHTML = `
-                                    <div><h4>卡牌 ${cardNum} - 选项D（创心力）</h4>
+                                    <div><h4>卡牌 ${card.card_code || cardNum} - 选项D（创心力）</h4>
                                     <p><strong>你的选择：</strong>${optionD}</p>
                                     <p><strong>反馈：</strong>你选择了创新的解决方案！创心力让你找到了独特的解决方式。</p>
                                     </div>
@@ -1486,20 +1515,23 @@
                     alert('请先输入卡牌编号');
                     return;
                 }
-                const card = window.CARD_DATA.find(c => c.id === parseInt(cardNum));
+                const card = findCardByInput(cardNum);
                 if (!card) {
                     alert('卡牌编号不存在');
                     return;
                 }
-                cardTimeMarks[cardNum] = Date.now();
+                const recId = card.id;
+                cardTimeMarks[recId] = Date.now();
                 if (window.GameReview && window.GameReview.recordEvent) {
                     window.GameReview.recordEvent('card_view', {
-                        cardId: parseInt(cardNum, 10),
+                        cardId: recId,
+                        cardCode: card.card_code || null,
                         ts: Date.now()
                     });
                 }
                 document.getElementById('modal-body').innerHTML = `
-                    <h3>卡牌 ${cardNum} - ${card.safetyType}</h3>
+                    <h3>卡牌 ${card.card_code || cardNum} - ${card.safetyType}</h3>
+                    ${card.guide_text ? `<p style="color:#8a6d3b;font-style:italic">${card.guide_text}</p>` : ''}
                     <p>${card.event}</p>
                     <div class="audio-player" id="card-audio-player">
                         <button class="audio-player-btn" id="audio-play-btn" title="播放/暂停">
@@ -1653,16 +1685,18 @@
 
                 const cardNum = document.getElementById('card-number').value;
                 if (cardNum && selectedChoice) {
-                    const card = window.CARD_DATA.find(c => c.id === parseInt(cardNum));
+                    const card = findCardByInput(cardNum);
                     if (card && card.options[selectedChoice]) {
                         const option = card.options[selectedChoice];
+                        const recId = card.id;
+                        const cardLabel = card.card_code || cardNum;
 
                         // 自由体验模式：本局已结束（通关/失败/超时），只展示反馈，不计分、不记录历史、不回传后端
                         if (gameEnded) {
                             document.getElementById('choice-display').innerHTML = `
                                 <div>
                                     <span style="display:inline-block;background:#faad14;color:#fff;font-size:12px;padding:2px 10px;border-radius:10px;margin-bottom:8px;">自由体验 · 不计分</span>
-                                    <h4>卡牌 ${cardNum} - ${selectedChoice}</h4>
+                                    <h4>卡牌 ${cardLabel} - ${selectedChoice}</h4>
                                     <p>${option.consequence}</p>
                                 </div>
                             `;
@@ -1722,7 +1756,7 @@
                             }
                             // 显示选项反馈
                             document.getElementById('choice-display').innerHTML = `
-                                <div><h4>卡牌 ${cardNum} - ${selectedChoice}</h4>
+                                <div><h4>卡牌 ${cardLabel} - ${selectedChoice}</h4>
                                 <p>${option.consequence}</p>
                                 </div>
                             `;
@@ -1735,7 +1769,7 @@
                                 playSound('success'); // 播放通关成功声效
                                 // 最后一张卡牌的反馈也要展示：通关界面在 progress-display，选项反馈在 choice-display
                                 document.getElementById('choice-display').innerHTML = `
-                                    <div><h4>卡牌 ${cardNum} - ${selectedChoice}</h4>
+                                    <div><h4>卡牌 ${cardLabel} - ${selectedChoice}</h4>
                                     <p>${option.consequence}</p>
                                     </div>
                                 `;
@@ -1752,7 +1786,7 @@
                                 `;
                             } else {
                                 document.getElementById('choice-display').innerHTML = `
-                                    <div><h4>卡牌 ${cardNum} - ${selectedChoice}</h4>
+                                    <div><h4>卡牌 ${cardLabel} - ${selectedChoice}</h4>
                                     <p>${option.consequence}</p>
                                     </div>
                                 `;
@@ -1763,7 +1797,8 @@
 
                         // 记录历史和分析数据
                         const historyEntry = {
-                            cardId: parseInt(cardNum),
+                            cardId: recId,
+                            cardCode: card.card_code || null,
                             selectedOption: selectedChoice,
                             cardData: card,
                             optionData: option,
@@ -1773,18 +1808,23 @@
                             wasFailure: hasZero,
                             isCreativeOption: false
                         };
-                        const timeStart = cardTimeMarks[cardNum];
+                        const timeStart = cardTimeMarks[recId];
                         const timeSpentSec = timeStart ? Math.round((Date.now() - timeStart) / 1000) : null;
-                        if (timeStart) delete cardTimeMarks[cardNum];
+                        if (timeStart) delete cardTimeMarks[recId];
                         if (window.GameReview && window.GameReview.recordEvent) {
                             window.GameReview.recordEvent('card_choice', {
-                                cardId: parseInt(cardNum, 10),
+                                cardId: recId,
+                                cardCode: card.card_code || null,
                                 phase: card.phase,
                                 eventText: card.event,
                                 choice: selectedChoice,
                                 optionText: option.text,
                                 consequence: option.consequence,
+                                reason: option.reason || null,
                                 attributeDelta: option.attributeEffects,
+                                allOptions: Object.fromEntries(Object.entries(card.options).map(([k, o]) => [k, { text: o.text, consequence: o.consequence, reason: o.reason || null, attributeEffects: o.attributeEffects }])),
+                                subtopic: card.subtopic || null,
+                                whitepaperRef: card.whitepaper_ref || null,
                                 attributesBefore: historyEntry.attributesBefore,
                                 attributesAfter: historyEntry.attributesAfter,
                                 wasFailure: hasZero,
@@ -1797,7 +1837,7 @@
 
                         // 更新分析数据
                         gameAnalytics.cardsPlayed.push({
-                            cardId: parseInt(cardNum),
+                            cardId: recId,
                             phase: card.phase,
                             choice: selectedChoice,
                             attributeEffects: option.attributeEffects,
@@ -1807,7 +1847,7 @@
 
                         if (hasZero) {
                             gameAnalytics.failures.push({
-                                cardId: parseInt(cardNum),
+                                cardId: recId,
                                 failureCount: window.globalState.state.stageFailures,
                                 timestamp: new Date()
                             });

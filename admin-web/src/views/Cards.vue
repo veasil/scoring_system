@@ -2,8 +2,15 @@
   <div>
     <h1 class="page-title">卡牌管理</h1>
 
+    <!-- 工作台切换 -->
+    <el-radio-group v-model="workbench" style="margin-bottom:12px" @change="onWorkbenchChange">
+      <el-radio-button v-for="w in WORKBENCHES" :key="w" :value="w">
+        {{ w }}<span style="opacity:.6;margin-left:4px">{{ workbenchCount(w) }}</span>
+      </el-radio-button>
+    </el-radio-group>
+
     <div class="toolbar">
-      <el-input v-model="q" placeholder="搜索 事件/编号" clearable style="width:240px" @keyup.enter="load" />
+      <el-input v-model="q" placeholder="搜索 事件/编号/标题" clearable style="width:240px" @keyup.enter="load" />
       <el-select v-model="status" placeholder="状态" clearable style="width:140px" @change="load">
         <el-option label="测试中 (pending)" value="pending" />
         <el-option label="沙盒就绪 (active)" value="active" />
@@ -17,14 +24,19 @@
     </div>
 
     <el-table :data="filtered" v-loading="loading" border size="small" style="margin-top:4px">
-      <el-table-column prop="key" label="编号" width="70" sortable />
+      <el-table-column label="编号" width="92" sortable :sort-by="row => row.card_code || row.key">
+        <template #default="{ row }">{{ row.card_code || row.key }}</template>
+      </el-table-column>
+      <el-table-column prop="title" label="标题" width="150" show-overflow-tooltip>
+        <template #default="{ row }"><span style="color:#606266">{{ row.title || '—' }}</span></template>
+      </el-table-column>
       <el-table-column prop="safetyType" label="安全力" width="100">
         <template #default="{ row }"><el-tag size="small" effect="plain">{{ row.safetyType }}</el-tag></template>
       </el-table-column>
       <el-table-column prop="phase" label="阶段" width="90">
         <template #default="{ row }"><el-tag size="small" type="info">{{ row.phase }}</el-tag></template>
       </el-table-column>
-      <el-table-column prop="event" label="事件" min-width="280" show-overflow-tooltip />
+      <el-table-column prop="event" label="事件" min-width="240" show-overflow-tooltip />
       <el-table-column label="状态" width="100">
         <template #default="{ row }">
           <el-tag size="small" :type="statusType(row.status)">{{ statusLabel(row.status) }}</el-tag>
@@ -51,8 +63,21 @@
     </el-table>
 
     <!-- 新建 / 编辑卡牌 -->
-    <el-dialog v-model="dialog" :title="editing ? `编辑卡牌 #${form.key}` : '新建卡牌'" width="760px" top="5vh">
+    <el-dialog v-model="dialog" :title="editing ? `编辑卡牌 ${form.card_code || '#' + form.key}` : '新建卡牌'" width="760px" top="5vh">
       <el-form :model="form" label-width="80px">
+        <div style="display:flex; gap:12px">
+          <el-form-item label="卡牌编号" style="flex:1">
+            <el-input v-model="form.card_code" placeholder="如 2026B01（经典卡可留空）" />
+          </el-form-item>
+          <el-form-item label="标题" style="flex:2">
+            <el-input v-model="form.title" placeholder="卡牌标题" />
+          </el-form-item>
+          <el-form-item label="工作台" style="flex:1">
+            <el-select v-model="form.workbench" style="width:100%">
+              <el-option v-for="w in WORKBENCHES" :key="w" :label="w" :value="w" />
+            </el-select>
+          </el-form-item>
+        </div>
         <div style="display:flex; gap:12px">
           <el-form-item label="安全力" style="flex:1">
             <el-select v-model="form.safetyType" style="width:100%">
@@ -71,15 +96,27 @@
             </el-select>
           </el-form-item>
         </div>
+        <div style="display:flex; gap:12px">
+          <el-form-item label="二级子议题" style="flex:1">
+            <el-input v-model="form.subtopic" placeholder="如 危险挑战模仿 / 同伴压力" />
+          </el-form-item>
+          <el-form-item label="白皮书章节" style="flex:1">
+            <el-input v-model="form.whitepaper_ref" placeholder="对应白皮书章节" />
+          </el-form-item>
+        </div>
         <el-form-item label="事件">
           <el-input v-model="form.event" type="textarea" :rows="3" placeholder="描述卡牌情境事件" />
+        </el-form-item>
+        <el-form-item label="引导语">
+          <el-input v-model="form.guide_text" type="textarea" :rows="2" placeholder="如：身体安全风险预警已出现，该如何助力小伍通关？" />
         </el-form-item>
 
         <el-divider content-position="left">三个选项与五力影响</el-divider>
         <div v-for="opt in OPTION_KEYS" :key="opt" class="opt-block">
           <div class="opt-head">选项 {{ opt }}</div>
           <el-input v-model="form.options[opt].text" placeholder="选项文本" size="small" style="margin-bottom:6px" />
-          <el-input v-model="form.options[opt].consequence" type="textarea" :rows="2" placeholder="后果描述" size="small" />
+          <el-input v-model="form.options[opt].consequence" type="textarea" :rows="2" placeholder="后果描述" size="small" style="margin-bottom:6px" />
+          <el-input v-model="form.options[opt].reason" type="textarea" :rows="3" placeholder="五力理由（逐维度说明加减分依据，监督模式/复盘会用到）" size="small" />
           <div class="attr-row">
             <span v-for="a in ATTRS" :key="a" class="attr-item">
               <label>{{ a }}</label>
@@ -87,6 +124,17 @@
             </span>
           </div>
         </div>
+
+        <el-divider content-position="left">培训师资料（仅后台可见）</el-divider>
+        <el-form-item label="导师索引">
+          <el-input v-model="form.trainer_material.mentor_index" type="textarea" :rows="2" placeholder="带教要点 / 核心认知" />
+        </el-form-item>
+        <el-form-item label="机制点">
+          <el-input v-model="form.trainer_material.trainer_notes" type="textarea" :rows="2" placeholder="培训师机制点" />
+        </el-form-item>
+        <el-form-item label="补充案例">
+          <el-input v-model="form.trainer_material.extra_cases" type="textarea" :rows="2" placeholder="补充案例（可留空）" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialog = false">取消</el-button>
@@ -157,25 +205,35 @@ const SAFETY_TYPES = ['身体安全', '心理安全', '社交安全', '经济安
 const PHASES = ['启蒙期', '成长期', '青春期']
 const ATTRS = ['安全力', '脑波力', '实感力', '创心力', '沟通力']
 const OPTION_KEYS = ['A', 'B', 'C']
+const WORKBENCHES = ['经典版', '2026版']
 
 const cards = ref([])
 const loading = ref(false)
 const q = ref('')
 const status = ref('')
 const safetyFilter = ref('')
+const workbench = ref('经典版')
 
 const filtered = computed(() => {
-  let list = cards.value
+  let list = cards.value.filter(c => (c.workbench || '经典版') === workbench.value)
   if (safetyFilter.value) list = list.filter(c => c.safetyType === safetyFilter.value)
   return list
 })
 
+function workbenchCount(w) {
+  return cards.value.filter(c => (c.workbench || '经典版') === w).length
+}
+function onWorkbenchChange() { /* 纯前端筛选，无需重新拉取 */ }
+
 function emptyOptions() {
   const o = {}
   for (const k of OPTION_KEYS) {
-    o[k] = { text: '', consequence: '', attributeEffects: Object.fromEntries(ATTRS.map(a => [a, 0])) }
+    o[k] = { text: '', consequence: '', reason: '', attributeEffects: Object.fromEntries(ATTRS.map(a => [a, 0])) }
   }
   return o
+}
+function emptyTrainer() {
+  return { mentor_index: '', trainer_notes: '', extra_cases: '' }
 }
 
 function statusLabel(s) { return { pending: '测试中', active: '沙盒就绪', deleted: '已删除' }[s] || s }
@@ -194,7 +252,11 @@ async function load() {
     let list = data.cards
     if (q.value) {
       const kw = q.value.trim().toLowerCase()
-      list = list.filter(c => String(c.key).includes(kw) || (c.event || '').toLowerCase().includes(kw))
+      list = list.filter(c =>
+        String(c.key).includes(kw) ||
+        (c.card_code || '').toLowerCase().includes(kw) ||
+        (c.title || '').toLowerCase().includes(kw) ||
+        (c.event || '').toLowerCase().includes(kw))
     }
     cards.value = list
   } catch (e) {
@@ -207,13 +269,23 @@ const dialog = ref(false)
 const editing = ref(false)
 const saving = ref(false)
 const editId = ref(null)
-const form = reactive({ key: '', safetyType: SAFETY_TYPES[0], phase: PHASES[0], event: '', status: 'pending', options: emptyOptions() })
+const form = reactive({
+  key: '', card_code: '', workbench: '经典版', title: '', subtopic: '', whitepaper_ref: '',
+  safetyType: SAFETY_TYPES[0], phase: PHASES[0], event: '', guide_text: '', status: 'pending',
+  options: emptyOptions(), trainer_material: emptyTrainer()
+})
 
 function fillForm(src) {
   form.key = src?.key ?? ''
+  form.card_code = src?.card_code || ''
+  form.workbench = src?.workbench || workbench.value || '经典版'
+  form.title = src?.title || ''
+  form.subtopic = src?.subtopic || ''
+  form.whitepaper_ref = src?.whitepaper_ref || ''
   form.safetyType = src?.safetyType || SAFETY_TYPES[0]
   form.phase = src?.phase || PHASES[0]
   form.event = src?.event || ''
+  form.guide_text = src?.guide_text || ''
   form.status = src?.status || 'pending'
   const base = emptyOptions()
   if (src?.options) {
@@ -222,11 +294,14 @@ function fillForm(src) {
       if (so) {
         base[k].text = so.text || ''
         base[k].consequence = so.consequence || ''
+        base[k].reason = so.reason || ''
         for (const a of ATTRS) base[k].attributeEffects[a] = Number(so.attributeEffects?.[a] || 0)
       }
     }
   }
   form.options = base
+  const t = src?.trainer_material || {}
+  form.trainer_material = { mentor_index: t.mentor_index || '', trainer_notes: t.trainer_notes || '', extra_cases: t.extra_cases || '' }
 }
 
 function openCreate() { editing.value = false; editId.value = null; fillForm(null); dialog.value = true }
@@ -236,7 +311,13 @@ async function save() {
   if (!form.event.trim()) return ElMessage.warning('请填写事件描述')
   saving.value = true
   try {
-    const body = { safetyType: form.safetyType, event: form.event, phase: form.phase, options: form.options }
+    const body = {
+      safetyType: form.safetyType, event: form.event, phase: form.phase, options: form.options,
+      card_code: form.card_code || null, workbench: form.workbench || '经典版',
+      title: form.title || null, guide_text: form.guide_text || null,
+      subtopic: form.subtopic || null, whitepaper_ref: form.whitepaper_ref || null,
+      trainer_material: form.trainer_material
+    }
     if (editing.value) {
       body.status = form.status
       await updateCard(editId.value, body)
