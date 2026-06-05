@@ -1,4 +1,7 @@
 import api from './index'
 
-export const loginByPassword = (username, password) =>
-  api.post('/api/auth/login', { username, password })
+export const sendSmsCode = (phone) =>
+  api.post('/api/auth/sms/send', { phone })
+
+export const loginByPassword = (phone, password, code) =>
+  api.post('/api/auth/login', { phone, password, code })
