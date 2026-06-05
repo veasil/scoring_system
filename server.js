@@ -174,6 +174,9 @@ const upload = multer({
 
 
 
+// 信任反向代理（Zeabur/nginx），让 req.ip 取到真实客户端 IP——短信接口 IP 限流依赖它
+app.set("trust proxy", 1);
+
 app.use(morgan("dev"));
 app.use(express.json({ limit: "2mb" }));
 

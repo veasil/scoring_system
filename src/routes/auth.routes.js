@@ -6,6 +6,7 @@ import { config } from "../config.js";
 import { signToken, authMiddleware } from "../middleware/auth.js";
 import { rotateSession, revokeSession } from "../services/sessions.js";
 import { normalizePhone, sendCode, verifyCode } from "../services/sms.js";
+import { verifyCaptcha } from "../services/captcha.js";
 import { resolveValidity } from "../account.js";
 
 const router = Router();
@@ -143,7 +144,16 @@ router.post("/api/auth/sms/send", async (req, res) => {
   if (!phone) return res.status(400).json({ error: "缺少手机号" });
   if (phone.length < 6) return res.status(400).json({ error: "手机号格式不正确" });
 
-  const result = await sendCode(phone);
+  // ① 人机校验（CAPTCHA_ENABLED 时强制；未启用则放行并告警）
+  const cap = await verifyCaptcha({
+    ticket: req.body?.captchaTicket,
+    randstr: req.body?.captchaRandstr,
+    ip: req.ip,
+  });
+  if (!cap.ok) return res.status(400).json({ error: cap.error || "人机验证失败" });
+
+  // ②③ 限流 + 发送（限流对 Bmob 真实分支同样生效，验证码 5 分钟过期、用一次即失效）
+  const result = await sendCode(phone, req.ip);
   if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
 
   if (result.mockCode) {

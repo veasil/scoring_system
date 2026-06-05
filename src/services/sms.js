@@ -17,9 +17,87 @@ export const smsStore = new Map();
 export const SMS_CODE_TTL_MS = Number(process.env.SMS_CODE_TTL_MS ?? 5 * 60 * 1000);
 export const SMS_RESEND_INTERVAL_MS = Number(process.env.SMS_RESEND_INTERVAL_MS ?? 60 * 1000);
 
+// ===== 发送限流（防短信轰炸 / 话费欺诈）=====
+// 同手机号 60s 不重发、每日≤10 条；同 IP 每小时≤20 次。0 表示不限制（测试用）。
+// 内存实现：默认单实例部署。多实例需换 Redis（见 docs 安全审计）。
+export const SMS_DAILY_LIMIT = Number(process.env.SMS_DAILY_LIMIT ?? 10);
+export const SMS_IP_HOURLY_LIMIT = Number(process.env.SMS_IP_HOURLY_LIMIT ?? 20);
+const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+
+// phone => { lastSent, windowStart, count }（count 为当日窗口内已发条数）
+const phoneQuota = new Map();
+// ip => { windowStart, count }（count 为当前小时窗口内已发条数）
+const ipQuota = new Map();
+
+// 周期清理过期配额，防内存被「换号轰炸」撑爆
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of phoneQuota) {
+    if (now - v.windowStart >= DAY_MS && now - v.lastSent >= SMS_RESEND_INTERVAL_MS) phoneQuota.delete(k);
+  }
+  for (const [k, v] of ipQuota) {
+    if (now - v.windowStart >= HOUR_MS) ipQuota.delete(k);
+  }
+}, 10 * 60 * 1000).unref?.();
+
+// 发送前置限流检查（mock 与 Bmob 真实分支共用）。通过返回 {ok:true}。
+export function checkSendQuota(phone, ip) {
+  const now = Date.now();
+  const pq = phoneQuota.get(phone);
+  // 1) 同手机号 60s 重发间隔
+  if (pq && SMS_RESEND_INTERVAL_MS > 0 && now - pq.lastSent < SMS_RESEND_INTERVAL_MS) {
+    const waitSec = Math.ceil((SMS_RESEND_INTERVAL_MS - (now - pq.lastSent)) / 1000);
+    return { ok: false, status: 429, error: `请等待 ${waitSec} 秒后重试` };
+  }
+  // 2) 同手机号当日上限
+  if (pq && SMS_DAILY_LIMIT > 0 && now - pq.windowStart < DAY_MS && pq.count >= SMS_DAILY_LIMIT) {
+    return { ok: false, status: 429, error: "今日验证码发送次数已达上限，请明天再试" };
+  }
+  // 3) 同 IP 每小时上限
+  if (ip && SMS_IP_HOURLY_LIMIT > 0) {
+    const iq = ipQuota.get(ip);
+    if (iq && now - iq.windowStart < HOUR_MS && iq.count >= SMS_IP_HOURLY_LIMIT) {
+      return { ok: false, status: 429, error: "操作过于频繁，请稍后再试" };
+    }
+  }
+  return { ok: true };
+}
+
+// 仅在「确实发出一条」后调用，累加配额计数
+function recordSend(phone, ip) {
+  const now = Date.now();
+  const pq = phoneQuota.get(phone);
+  if (!pq || now - pq.windowStart >= DAY_MS) {
+    phoneQuota.set(phone, { lastSent: now, windowStart: now, count: 1 });
+  } else {
+    pq.lastSent = now;
+    pq.count += 1;
+  }
+  if (ip && SMS_IP_HOURLY_LIMIT > 0) {
+    const iq = ipQuota.get(ip);
+    if (!iq || now - iq.windowStart >= HOUR_MS) {
+      ipQuota.set(ip, { windowStart: now, count: 1 });
+    } else {
+      iq.count += 1;
+    }
+  }
+}
+
 export function normalizePhone(input) {
   if (!input) return "";
   return String(input).replace(/\D/g, "");
+}
+
+// 测试登录后门：仅当配置了 TEST_LOGIN_CODE 时启用。
+// TEST_LOGIN_PHONES 为逗号分隔的白名单手机号，这些号码用 TEST_LOGIN_CODE 即可通过校验，
+// 不真正调用 Bmob 发短信。生产环境不要配置这两个变量即可彻底关闭。
+const TEST_LOGIN_CODE = (process.env.TEST_LOGIN_CODE || "").trim();
+const TEST_LOGIN_PHONES = new Set(
+  (process.env.TEST_LOGIN_PHONES || "").split(",").map(s => s.trim()).filter(Boolean)
+);
+function isTestLogin(phone) {
+  return TEST_LOGIN_CODE && TEST_LOGIN_PHONES.has(normalizePhone(phone));
 }
 
 export function generateSmsCode() {
@@ -30,21 +108,27 @@ export function generateSmsCode() {
  * 发送验证码。
  * @returns {Promise<{ok:boolean, status?:number, error?:string, mockCode?:string, smsId?:string, expiresInSeconds?:number}>}
  */
-export async function sendCode(phone) {
+export async function sendCode(phone, ip = null) {
+  if (isTestLogin(phone)) {
+    console.log(`🧪 测试号码 [${phone}] 跳过真实短信，固定验证码: ${TEST_LOGIN_CODE}`);
+    return { ok: true, mockCode: TEST_LOGIN_CODE, expiresInSeconds: 600 };
+  }
+
+  // 限流：mock 与 Bmob 真实发送分支统一前置拦截（防轰炸 + 话费欺诈）
+  const quota = checkSendQuota(phone, ip);
+  if (!quota.ok) return quota;
+
   if (!bmobSMS) {
     const now = Date.now();
-    const existing = smsStore.get(phone);
-    if (existing && now - existing.lastSent < SMS_RESEND_INTERVAL_MS) {
-      const waitSec = Math.ceil((SMS_RESEND_INTERVAL_MS - (now - existing.lastSent)) / 1000);
-      return { ok: false, status: 429, error: `请等待 ${waitSec} 秒后重试` };
-    }
     const mockCode = generateSmsCode();
     smsStore.set(phone, { code: mockCode, expiresAt: now + SMS_CODE_TTL_MS, lastSent: now });
+    recordSend(phone, ip);
     console.log(`📱 模拟短信验证码 [${phone}]: ${mockCode}`);
     return { ok: true, mockCode, expiresInSeconds: Math.floor(SMS_CODE_TTL_MS / 1000) };
   }
   try {
     const result = await bmobSMS.sendSmsCode(phone);
+    recordSend(phone, ip); // 仅真实发出后才计入配额
     return { ok: true, smsId: result.smsId };
   } catch (e) {
     return { ok: false, status: 400, error: e.message };
@@ -58,6 +142,11 @@ export async function sendCode(phone) {
  * @returns {Promise<{ok:boolean, error?:string}>}
  */
 export async function verifyCode(phone, code, { consume = true } = {}) {
+  if (isTestLogin(phone)) {
+    return String(code) === TEST_LOGIN_CODE
+      ? { ok: true }
+      : { ok: false, error: "验证码错误" };
+  }
   if (!bmobSMS) {
     const stored = smsStore.get(phone);
     if (!stored) return { ok: false, error: "验证码不存在或已过期" };

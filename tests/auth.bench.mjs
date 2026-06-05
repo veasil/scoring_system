@@ -54,6 +54,8 @@ function startServer() {
         BMOB_APP_ID: "",      // 强制走开发环境 mock 短信
         BMOB_REST_KEY: "",
         SMS_RESEND_INTERVAL_MS: "0",  // 测试中不限制重发间隔
+        SMS_DAILY_LIMIT: "0",         // 测试中不限制每日条数
+        SMS_IP_HOURLY_LIMIT: "0",     // 测试中不限制单 IP 频次
         SMS_CODE_TTL_MS: "300000",
         ALIBABA_CLOUD_ACCESS_KEY_ID: "",   // 不初始化 OSS
         ALIBABA_CLOUD_ACCESS_KEY_SECRET: "",
@@ -72,6 +74,7 @@ function startServer() {
 
 const ADMIN_PHONE = "13900000001";
 const ADMIN_PWD = "secret123";
+const PERMANENT_UNTIL = 253402300799000; // 永久会员哨兵，与 src/account.js 一致
 
 async function getCode(phone) {
   const r = await api("POST", "/api/auth/sms/send", { body: { phone } });
@@ -104,11 +107,20 @@ async function run() {
     const orgId = r.json.organization.id;
     const adminUserId = r.json.adminUser.id;
 
+    // 2.5 新建组织默认未开通会员（valid_until=NULL）→ 成员登录被拒
+    let code = await getCode(ADMIN_PHONE);
+    r = await api("POST", "/api/auth/login", { body: { phone: ADMIN_PHONE, password: ADMIN_PWD, code } });
+    check("新建组织未开通 → 403 ORG_NO_MEMBERSHIP", r.status === 403 && r.json?.code === "ORG_NO_MEMBERSHIP", JSON.stringify(r.json));
+
+    // 开通组织为永久会员，后续登录用例才能通过
+    r = await api("PUT", `/api/admin/organizations/${orgId}/validity`, { token: bossToken1, body: { validUntil: PERMANENT_UNTIL } });
+    check("开通组织(永久) 200", r.status === 200, JSON.stringify(r.json));
+
     // 3. 三要素登录
     r = await api("POST", "/api/auth/login", { body: { phone: ADMIN_PHONE, password: ADMIN_PWD } });
     check("登录缺验证码 → 400", r.status === 400, JSON.stringify(r.json));
 
-    let code = await getCode(ADMIN_PHONE);
+    code = await getCode(ADMIN_PHONE);
     r = await api("POST", "/api/auth/login", { body: { phone: ADMIN_PHONE, password: ADMIN_PWD, code: "000000" } });
     check("登录错验证码 → 400", r.status === 400, JSON.stringify(r.json));
 
@@ -170,6 +182,27 @@ async function run() {
     await api("POST", "/api/auth/logout", { token: adminToken4 });
     r = await api("GET", "/api/me", { token: adminToken4 });
     check("登出后 token → 401", r.status === 401, JSON.stringify(r.json));
+
+    // 8.5 独立用户（无组织）会员资产：默认未开通 → 开通 → 登录
+    const SOLO_PHONE = "13700000007";
+    const SOLO_PWD = "solo123456";
+    r = await api("POST", "/api/admin/users", { token: bossToken1, body: { phone: SOLO_PHONE, password: SOLO_PWD, role: "watcher" } });
+    check("创建独立用户 200", r.status === 200 && r.json?.id, JSON.stringify(r.json));
+    const soloId = r.json.id;
+
+    code = await getCode(SOLO_PHONE);
+    r = await api("POST", "/api/auth/login", { body: { phone: SOLO_PHONE, password: SOLO_PWD, code } });
+    check("独立用户未开通 → 403 NO_MEMBERSHIP", r.status === 403 && r.json?.code === "NO_MEMBERSHIP", JSON.stringify(r.json));
+
+    r = await api("PUT", `/api/admin/users/${soloId}/validity`, { token: bossToken1, body: { validUntil: PERMANENT_UNTIL } });
+    check("开通独立用户(永久) 200", r.status === 200, JSON.stringify(r.json));
+    code = await getCode(SOLO_PHONE);
+    r = await api("POST", "/api/auth/login", { body: { phone: SOLO_PHONE, password: SOLO_PWD, code } });
+    check("开通后独立用户登录 → 200", r.status === 200 && r.json?.token, JSON.stringify(r.json));
+
+    // 组织成员不能单独设有效期（后端拒绝，有效期跟随组织）
+    r = await api("PUT", `/api/admin/users/${adminUserId}/validity`, { token: bossToken1, body: { validUntil: PERMANENT_UNTIL } });
+    check("给组织成员单独设有效期 → 400", r.status === 400, JSON.stringify(r.json));
 
     // 9. 微信占位路由已删除
     r = await api("GET", "/api/auth/wechat/qr");
