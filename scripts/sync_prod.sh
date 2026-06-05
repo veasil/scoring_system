@@ -26,6 +26,26 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
+# ── Pre-deploy smoke test ──────────────────────────────────
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+echo ""
+echo "🧪 Running staging smoke tests..."
+python "$SCRIPT_DIR/test_staging.py" --skip-browser --cleanup
+TEST_EXIT=$?
+
+if [ $TEST_EXIT -ne 0 ]; then
+    echo ""
+    echo "❌ Staging smoke tests FAILED. Fix issues before promoting."
+    read -p "   Override and continue anyway? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo "❌ Sync aborted."
+        exit 1
+    fi
+    echo "⚠️  Continuing despite test failures (user override)."
+fi
+echo ""
+
 ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$USER@$HOST" << EOF
   echo "🔄 Syncing files..."
   # Sync Staging to Prod

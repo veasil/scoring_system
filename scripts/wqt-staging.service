@@ -5,6 +5,7 @@ After=network.target
 [Service]
 User=root
 WorkingDirectory=/home/admin/app/wqt-staging
+EnvironmentFile=/home/admin/app/wqt-staging/.env
 ExecStart=/usr/bin/npm run start
 Restart=always
 Environment=PORT=3001

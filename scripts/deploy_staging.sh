@@ -82,49 +82,54 @@ if ! grep -q "^PORT=" .env.staging.tmp; then
   echo "PORT=3001" >> .env.staging.tmp
 fi
 
+# 共享 Production 数据库 — staging 和 prod 使用同一份数据
+PROD_DIR="/home/admin/app/scoring_system"
+sed -i "s|^DB_PATH=.*|DB_PATH=${PROD_DIR}/data/wqt.db|" .env.staging.tmp
+sed -i "s|^CARDS_DB_PATH=.*|CARDS_DB_PATH=${PROD_DIR}/data/cards.db|" .env.staging.tmp
+
 scp -o StrictHostKeyChecking=no -i "$SSH_KEY" .env.staging.tmp "$USER@$HOST:$REMOTE_DIR/.env"
 rm .env.staging.tmp
 
-# 5. Services and Start
-echo "🚀 Starting Services..."
-ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$USER@$HOST" << EOF
+# 5. 配置文件 + 服务重启（独立 SSH 会话，与耗时的 install 步骤隔离，避免超时导致重启失败）
+echo "🚀 Restarting Services..."
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$USER@$HOST" "
+  set -e
   cd $REMOTE_DIR
-  
-  # Check if data directory exists
-  if [ ! -d "data" ]; then
-    mkdir -p data
-  fi
-  
-  # Copy Systemd service files
+
+  # 确保 data 目录存在
+  mkdir -p data
+
+  # 更新 Systemd service 文件
   cp scripts/wqt-staging.service /etc/systemd/system/
   cp scripts/wqt-staging-admin.service /etc/systemd/system/
-  
-  # Copy Nginx Config
+
+  # 更新 Nginx 配置
   cp scripts/nginx_staging.conf /etc/nginx/sites-available/wqt-staging
   ln -sf /etc/nginx/sites-available/wqt-staging /etc/nginx/sites-enabled/
-  
+
   systemctl daemon-reload
-  
-  # Restart Services
-  echo "🔄 Restarting Staging Services..."
+
+  # 重启服务
   systemctl enable wqt-staging
   systemctl restart wqt-staging
   systemctl enable wqt-staging-admin
   systemctl restart wqt-staging-admin
-  
-  # Reload Nginx
-  echo "🔄 Reloading Nginx..."
+
+  # 重载 Nginx
   nginx -t && systemctl reload nginx
 
-  # Fix Permissions (Force admin:admin ownership)
-  echo "👮 Fixing permissions..."
+  echo '✅ 服务重启完成'
+  systemctl is-active wqt-staging
+  systemctl is-active wqt-staging-admin
+"
+
+# 6. 收尾：权限修复 + 部署日志（独立 SSH 会话，失败不影响主流程）
+echo "📝 Finalizing..."
+ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$USER@$HOST" "
   chown -R admin:admin $REMOTE_DIR
-  
-  # 生成部署日志
-  echo "📝 生成部署日志..."
+
   mkdir -p $REMOTE_DIR/deploy_logs
-  
-  cat > $REMOTE_DIR/deploy_logs/$LOG_FILENAME << LOGEOF
+  cat > $REMOTE_DIR/deploy_logs/$LOG_FILENAME << 'LOGEOF'
 ==============================================
 部署日志 - Staging 环境
 ==============================================
@@ -134,11 +139,6 @@ ssh -o StrictHostKeyChecking=no -i "$SSH_KEY" "$USER@$HOST" << EOF
 Git 分支: $GIT_BRANCH
 Git 提交: $GIT_COMMIT
 服务器IP: $HOST
-
-----------------------------------------------
-代码变更摘要 (最近5次提交):
-----------------------------------------------
-$(cd $REMOTE_DIR && git log --oneline -5 2>/dev/null || echo "无法获取 Git 历史")
 
 ----------------------------------------------
 部署操作记录:
@@ -161,14 +161,12 @@ $(cd $REMOTE_DIR && git log --oneline -5 2>/dev/null || echo "无法获取 Git �
 API URL (HTTPS): https://www.ai5000days.com/staging/
 API URL (HTTP):  http://$HOST:8081
 Admin URL: http://$HOST:8502
-
-日志文件: $REMOTE_DIR/deploy_logs/$LOG_FILENAME
 ==============================================
 LOGEOF
 
   chown admin:admin $REMOTE_DIR/deploy_logs/$LOG_FILENAME
-  echo "   ✅ 日志已保存到: $REMOTE_DIR/deploy_logs/$LOG_FILENAME"
-EOF
+  echo '✅ 日志已保存'
+" || echo "⚠️  收尾步骤失败（不影响服务运行）"
 
 echo "✅ Deployment to Staging Complete!"
 echo "🌍 API (HTTPS): https://www.ai5000days.com/staging/"

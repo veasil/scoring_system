@@ -9,6 +9,7 @@ ExecStart=/home/admin/app/wqt-staging/venv/bin/streamlit run app.py --server.por
 Restart=always
 Environment=PORT=8502
 Environment=BACKEND_URL=http://127.0.0.1:3001
+Environment=DB_PATH=/home/admin/app/scoring_system/data/wqt.db
 
 [Install]
 WantedBy=multi-user.target
