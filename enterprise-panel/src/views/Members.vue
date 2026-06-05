@@ -3,6 +3,7 @@
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px">
       <h3>成员管理</h3>
       <div style="display:flex; gap:8px; align-items:center">
+        <el-tag v-if="org" :type="orgBadge.type" effect="plain">成员有效期跟随组织：{{ orgBadge.text }}</el-tag>
         <el-tag v-if="quota">{{ quota.used }} / {{ quota.max }} 人</el-tag>
         <el-button type="primary" :icon="Plus" @click="showAddDialog = true">添加成员</el-button>
       </div>
@@ -54,14 +55,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { getMembers, createMember, deleteMember } from '../api/members'
-import { formatDate, LEVEL_LABELS } from '../utils/format'
+import { getOrgInfo } from '../api/dashboard'
+import { formatDate, LEVEL_LABELS, membershipBadge } from '../utils/format'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 
 const members = ref([])
 const quota = ref(null)
+const org = ref(null)
+const orgBadge = computed(() => membershipBadge(org.value?.validUntil))
 const loading = ref(false)
 const showAddDialog = ref(false)
 const addLoading = ref(false)
@@ -70,9 +74,10 @@ const addForm = reactive({ phone: '', guardianName: '', realName: '', password: 
 async function loadData() {
   loading.value = true
   try {
-    const { data } = await getMembers()
-    members.value = data.members
-    quota.value = data.quota
+    const [m, info] = await Promise.all([getMembers(), getOrgInfo()])
+    members.value = m.data.members
+    quota.value = m.data.quota
+    org.value = info.data.organization
   } catch { /* empty */ }
   loading.value = false
 }
