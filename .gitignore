@@ -34,3 +34,8 @@ walkthrough.md
 # Benchmark / local data artifacts
 .tmp-bench/
 *.xlsx
+
+# Local one-off test / scratch artifacts
+/test/
+test_llms.py
+tmp_adminweb.png
