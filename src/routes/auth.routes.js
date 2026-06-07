@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import { dbGet, dbRun, getSystemSetting } from "../db.js";
 import { config } from "../config.js";
 import { signToken, authMiddleware } from "../middleware/auth.js";
-import { rotateSession, revokeSession } from "../services/sessions.js";
+import { rotateSession, revokeSession, revokeUserSessions } from "../services/sessions.js";
 import { normalizePhone, sendCode, verifyCode } from "../services/sms.js";
 import { verifyCaptcha } from "../services/captcha.js";
 import { resolveValidity } from "../account.js";
@@ -177,6 +177,34 @@ router.post("/api/auth/sms/verify", async (req, res) => {
   const v = await verifyCode(phone, code, { consume: false });
   if (!v.ok) return res.status(400).json({ error: v.error });
   res.json({ ok: true });
+});
+
+// ======== 忘记密码：手机号 + 验证码 重置密码 ========
+// 前端流程：先调 /api/auth/sms/send 拿验证码，再带 phone+code+password 调本接口。
+// 要求：手机号必须为已注册账号，验证码校验通过后才允许修改密码。
+router.post("/api/auth/reset-password", async (req, res) => {
+  const phone = normalizePhone(req.body?.phone || "");
+  const { code, password } = req.body || {};
+  if (!phone) return res.status(400).json({ error: "请输入手机号" });
+  if (!code) return res.status(400).json({ error: "请输入验证码" });
+  if (!password || String(password).length < 6) {
+    return res.status(400).json({ error: "新密码至少 6 位" });
+  }
+
+  // ① 手机号必须是已有账号
+  const user = await dbGet("SELECT id, phone FROM users WHERE phone = ?", [phone]);
+  if (!user) return res.status(404).json({ error: "该手机号未注册，请检查后重试或注册新账号" });
+
+  // ② 验证码校验（消费，防重放）
+  const v = await verifyCode(phone, String(code).trim(), { consume: true });
+  if (!v.ok) return res.status(400).json({ error: v.error || "验证码错误" });
+
+  // ③ 更新密码 + 撤销所有在线会话（强制用新密码重新登录）
+  const hash = bcrypt.hashSync(String(password), 10);
+  await dbRun("UPDATE users SET password_hash = ? WHERE id = ?", [hash, user.id]);
+  await revokeUserSessions(user.id);
+
+  res.json({ ok: true, message: "密码已重置，请用新密码登录" });
 });
 
 // ======== 登出：撤销当前会话 ========
