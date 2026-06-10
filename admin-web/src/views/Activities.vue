@@ -5,6 +5,7 @@
       <el-button type="primary" @click="load">刷新</el-button>
       <el-button type="success" @click="openCreate">新建活动</el-button>
       <span style="color:#909399">共 {{ activities.length }} 个活动 · 按「桌-活动场次」管理</span>
+      <el-tag v-if="pendingCount" type="warning" effect="dark">待审核申请 {{ pendingCount }}</el-tag>
     </div>
 
     <el-table :data="activities" v-loading="loading" border size="small">
@@ -17,13 +18,17 @@
       <el-table-column prop="table_count" label="桌数" width="70" align="center" />
       <el-table-column prop="participant_count" label="参与人" width="80" align="center" />
       <el-table-column prop="avg_score" label="均分" width="80" align="center" />
-      <el-table-column label="状态" width="90">
+      <el-table-column label="状态" width="100">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.status === 'active' ? 'success' : 'info'">{{ row.status }}</el-tag>
+          <el-tag size="small" :type="statusTag(row.status).type">{{ statusTag(row.status).label }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="200" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
+          <template v-if="row.status === 'pending_approval'">
+            <el-button size="small" type="success" @click="setStatus(row, 'active')">通过</el-button>
+            <el-button size="small" type="danger" @click="setStatus(row, 'rejected')">驳回</el-button>
+          </template>
           <el-button size="small" @click="openSessions(row)">查看桌次</el-button>
           <el-button size="small" @click="openEdit(row)">编辑</el-button>
         </template>
@@ -66,19 +71,46 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { listActivities, createActivity, updateActivity, listActivitySessions } from '../api/admin'
 
 const activities = ref([])
 const loading = ref(false)
 function fmt(ts) { return ts ? new Date(Number(ts)).toLocaleString('zh-CN', { hour12: false }) : '' }
 
+const STATUS_MAP = {
+  pending_approval: { label: '待审核', type: 'warning' },
+  active: { label: '进行中', type: 'success' },
+  rejected: { label: '已驳回', type: 'danger' },
+  ended: { label: '已结束', type: 'info' },
+  archived: { label: '已归档', type: 'info' }
+}
+function statusTag(s) { return STATUS_MAP[s] || { label: s, type: 'info' } }
+const pendingCount = computed(() => activities.value.filter(a => a.status === 'pending_approval').length)
+
 async function load() {
   loading.value = true
-  try { const { data } = await listActivities(); activities.value = data.activities }
+  try {
+    const { data } = await listActivities()
+    // 待审核置顶，方便运营优先处理
+    activities.value = (data.activities || []).sort(
+      (a, b) => (a.status === 'pending_approval' ? 0 : 1) - (b.status === 'pending_approval' ? 0 : 1)
+    )
+  }
   catch (e) { ElMessage.error(e.response?.data?.error || '加载失败') }
   finally { loading.value = false }
+}
+
+async function setStatus(row, status) {
+  const word = status === 'active' ? '通过' : '驳回'
+  try {
+    await ElMessageBox.confirm(`确认${word}活动「${row.name}」？`, `${word}申请`, { type: 'warning' })
+  } catch { return }
+  try {
+    await updateActivity(row.id, { status })
+    ElMessage.success(`已${word}`); load()
+  } catch (e) { ElMessage.error(e.response?.data?.error || '操作失败') }
 }
 
 const dialog = ref(false)

@@ -15,6 +15,7 @@ import { BmobSMS } from "./src/bmob.js";
 import { config, decryptVal, loadConfig } from "./src/config.js";
 import { authMiddleware } from "./src/middleware/auth.js";
 import { requireRole, requireEnterprise } from "./src/middleware/rbac.js";
+import { resolveValidity } from "./src/account.js";
 import { normalizePhone, initSms } from "./src/services/sms.js";
 import authRouter from "./src/routes/auth.routes.js";
 import accountAdminRouter from "./src/routes/account-admin.routes.js";
@@ -235,6 +236,9 @@ app.get("/api/me", authMiddleware, async (req, res) => {
     );
     if (!user) return res.status(404).json({ error: "用户不存在" });
 
+    // 会员期限：组织成员跟随组织、独立用户用自身 valid_until（resolveValidity 统一判定）
+    const validity = await resolveValidity(req.user.uid);
+
     res.json({
       user: {
         id: user.id,
@@ -245,7 +249,10 @@ app.get("/api/me", authMiddleware, async (req, res) => {
         isProfileComplete: !!user.guardian_name,
         role: user.role || 'watcher',
         watcherLevel: user.watcher_level || 'initial',
-        enterpriseId: user.enterprise_id || null
+        enterpriseId: user.enterprise_id || null,
+        validUntil: validity.until ?? null,
+        validityValid: validity.valid,
+        validitySource: user.enterprise_id ? 'org' : 'user'
       }
     });
   } catch (e) {
@@ -266,6 +273,25 @@ app.get("/api/me/activities", authMiddleware, async (req, res) => {
       JOIN game_sessions gs ON gs.id = as2.session_id
       WHERE gs.user_id = ?
       ORDER BY gs.started_at DESC
+    `, [uid]);
+    res.json({ activities: rows });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// 我发起/申请的活动（含审核状态）。status: pending_approval | active | ...
+app.get("/api/me/activities/created", authMiddleware, async (req, res) => {
+  const uid = req.user.uid;
+  try {
+    const rows = await dbAll(`
+      SELECT a.id, a.name, a.organizer, a.activity_code, a.started_at, a.ended_at, a.status, a.created_at,
+             COUNT(DISTINCT as2.session_id) as table_count
+      FROM activities a
+      LEFT JOIN activity_sessions as2 ON as2.activity_id = a.id
+      WHERE a.created_by = ?
+      GROUP BY a.id
+      ORDER BY a.created_at DESC
     `, [uid]);
     res.json({ activities: rows });
   } catch (e) {
@@ -1122,6 +1148,79 @@ app.get("/api/cards", async (req, res) => {
     res.json({ cards: cards.map(formatReleasedCard) });
   } catch (e) {
     res.status(500).json({ error: "Failed to fetch cards: " + e.message });
+  }
+});
+
+// 1a-study. 守望学习：在 /api/cards 基础上回连 cards 表补全
+// subtopic / whitepaper_ref / trainer_material_json（培训资料，未进发布快照）。
+async function enrichWithStudyFields(releasedRows) {
+  const cards = releasedRows.map(formatReleasedCard);
+  const cardIds = [...new Set(releasedRows.map(r => r.card_id).filter(Boolean))];
+  if (cardIds.length === 0) return cards;
+  const ph = cardIds.map(() => "?").join(",");
+  const extra = await cardsDbAll(
+    `SELECT id, subtopic, whitepaper_ref, trainer_material_json FROM cards WHERE id IN (${ph})`,
+    cardIds
+  );
+  const byId = new Map(extra.map(e => [e.id, e]));
+  return cards.map(c => {
+    const e = byId.get(c.id);
+    let tm = null;
+    if (e && e.trainer_material_json) {
+      try {
+        const j = JSON.parse(e.trainer_material_json);
+        tm = {
+          mentorIndex: j.mentor_index || "",
+          trainerNotes: j.trainer_notes || "",
+          extraCases: j.extra_cases || ""
+        };
+      } catch (_) {}
+    }
+    return {
+      ...c,
+      subtopic: e?.subtopic || null,
+      whitepaperRef: e?.whitepaper_ref || null,
+      trainerMaterial: tm
+    };
+  });
+}
+
+// 守望学习为会员权益：authMiddleware 内含 resolveValidity，无会员/已到期/被停用直接 403
+app.get("/api/cards/study", authMiddleware, async (req, res) => {
+  try {
+    let groupId = req.query.group_id ? Number(req.query.group_id) : null;
+    if (!groupId) {
+      const def = await cardsDbGet("SELECT id FROM card_groups WHERE is_default = 1 LIMIT 1");
+      if (def) groupId = def.id;
+    }
+
+    let rows;
+    if (groupId) {
+      const group = await cardsDbGet("SELECT * FROM card_groups WHERE id = ?", [groupId]);
+      if (!group) return res.status(404).json({ error: "卡牌组不存在" });
+      let ids = [];
+      try { ids = JSON.parse(group.released_ids_json || "[]"); } catch (_) {}
+      if (ids.length === 0) return res.json({ cards: [], group: { id: group.id, name: group.name } });
+      const ph = ids.map(() => "?").join(",");
+      const fetched = await cardsDbAll(`SELECT * FROM cards_released WHERE id IN (${ph})`, ids);
+      const byId = new Map(fetched.map(r => [r.id, r]));
+      rows = ids.map(i => byId.get(i)).filter(Boolean);
+      const cards = await enrichWithStudyFields(rows);
+      return res.json({ cards, group: { id: group.id, name: group.name } });
+    }
+
+    // 回退：每个 key 最新快照
+    rows = await cardsDbAll(`
+      SELECT cr.* FROM cards_released cr
+      INNER JOIN (
+        SELECT key, MAX(released_at) as max_t FROM cards_released GROUP BY key
+      ) latest ON cr.key = latest.key AND cr.released_at = latest.max_t
+      ORDER BY cr.key ASC
+    `);
+    const cards = await enrichWithStudyFields(rows);
+    res.json({ cards });
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch study cards: " + e.message });
   }
 });
 
@@ -2092,8 +2191,21 @@ app.get("/api/activities/by-code/:code", async (req, res) => {
       [code.toUpperCase()]
     );
     if (!activity) return res.status(404).json({ error: "活动码无效" });
-    if (activity.status !== 'active') return res.status(410).json({ error: "活动已结束" });
-    res.json({ activity });
+    if (activity.status !== 'active') return res.status(410).json({ error: "活动尚未开放或已结束" });
+
+    // ?withSessions=1：附带桌次成绩（守望师名+分数），供「查询活动」展示
+    let sessions = undefined;
+    if (req.query.withSessions) {
+      sessions = await dbAll(`
+        SELECT as2.table_no, u.guardian_name, gs.final_score, gs.ended_at
+        FROM activity_sessions as2
+        JOIN game_sessions gs ON gs.id = as2.session_id
+        JOIN users u ON u.id = gs.user_id
+        WHERE as2.activity_id = ?
+        ORDER BY as2.table_no ASC
+      `, [activity.id]);
+    }
+    res.json({ activity, sessions });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
