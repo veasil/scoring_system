@@ -1535,9 +1535,8 @@
                         ts: Date.now()
                     });
                 }
-                const pdfPage = window.getCardPdfPage ? window.getCardPdfPage(card.card_code) : null;
-                const pdfUrl = window.CARD_PDF_URL || '';
-                const hasPdf = pdfPage && pdfUrl;
+                const cardImg = window.getCardImage ? window.getCardImage(card.card_code) : null;
+                const hasImg = !!cardImg;
                 document.getElementById('modal-body').innerHTML = `
                     <h3>卡牌 ${card.card_code || cardNum} - ${card.safetyType}</h3>
                     ${card.guide_text ? `<p style="color:#8a6d3b;font-style:italic">${card.guide_text}</p>` : ''}
@@ -1557,13 +1556,12 @@
                             </div>
                         </div>
                     </div>
-                    ${hasPdf
+                    ${hasImg
                         ? `<div class="card-pdf-wrap">
-                            <iframe class="card-pdf-frame" src="${pdfUrl}#page=${pdfPage}&view=FitH&toolbar=1"
-                                    title="卡牌 ${card.card_code} 印刷版" loading="lazy"></iframe>
+                            <img class="card-pdf-img" src="${cardImg}" alt="卡牌 ${card.card_code} 印刷版卡面" loading="lazy">
                            </div>
-                           <p class="card-pdf-hint">📄 印刷版第 ${pdfPage} 页 · 若未正常显示可
-                               <a href="${pdfUrl}#page=${pdfPage}" target="_blank" rel="noopener">在新窗口打开</a></p>`
+                           <p class="card-pdf-hint">📄 ${card.card_code} 印刷版卡面 ·
+                               <a href="${cardImg}" target="_blank" rel="noopener">查看大图</a></p>`
                         : `<p>${card.event}</p>
                            <div style="margin-top: 2rem;">
                                <h4>选项：</h4>

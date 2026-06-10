@@ -65,23 +65,21 @@
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
-/* 卡牌印刷版 PDF 内嵌查看器 */
+/* 卡牌印刷版卡面图 */
 .card-pdf-wrap {
     margin-top: var(--space-lg);
     width: 100%;
-    height: 60vh;
-    min-height: 360px;
     border-radius: var(--radius-lg);
     overflow: hidden;
     background: rgba(0, 0, 0, 0.25);
     box-shadow: var(--shadow-lg);
 }
 
-.card-pdf-frame {
+.card-pdf-img {
     width: 100%;
-    height: 100%;
-    border: none;
+    height: auto;
     display: block;
+    border-radius: var(--radius-lg);
 }
 
 .card-pdf-hint {
