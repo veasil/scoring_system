@@ -215,7 +215,7 @@
         }
         .study-card:hover { box-shadow: 0 6px 18px rgba(0,0,0,.12); transform: translateY(-2px); }
         .study-thumb {
-            width: 100%; aspect-ratio: 3/4;
+            width: 100%; aspect-ratio: 1089 / 612; /* 卡面图为横版 16:9 */
             background: linear-gradient(135deg,#667eea,#764ba2);
             display: flex; align-items: center; justify-content: center;
             color: #fff; font-size: 13px; font-weight: 600;
@@ -233,9 +233,21 @@
         }
         .cd-overlay.show { display: flex; }
         .cd-modal {
+            position: relative;
             background: #fff; border-radius: 16px; width: 100%; max-width: 460px;
             max-height: 90vh; display: flex; flex-direction: column; overflow: hidden;
         }
+        .cd-nav {
+            position: absolute; top: 50%; transform: translateY(-50%); z-index: 1001;
+            width: 40px; height: 40px; border-radius: 50%; border: none; cursor: pointer;
+            background: rgba(120,120,120,.45); color: #fff; font-size: 24px; line-height: 1;
+            display: flex; align-items: center; justify-content: center;
+            transition: background .2s, opacity .2s;
+        }
+        .cd-nav:hover { background: rgba(90,90,90,.65); }
+        .cd-nav.prev { left: 10px; }
+        .cd-nav.next { right: 10px; }
+        .cd-nav:disabled { opacity: 0; pointer-events: none; }
         .cd-close {
             position: absolute; top: 22px; right: 22px; z-index: 1002;
             width: 32px; height: 32px; border-radius: 50%; border: none;
@@ -253,8 +265,8 @@
         .cd-page h4 { color: #667eea; font-size: 15px; margin-bottom: 12px; }
         .cd-img {
             width: 100%; border-radius: 10px; margin-bottom: 12px;
-            background: linear-gradient(135deg,#667eea,#764ba2); aspect-ratio: 3/4;
-            object-fit: cover; display: block;
+            background: linear-gradient(135deg,#667eea,#764ba2); aspect-ratio: 1089 / 612;
+            object-fit: contain; display: block;
         }
         .cd-field { margin-bottom: 12px; }
         .cd-field .k { font-size: 12px; color: #999; margin-bottom: 3px; }
@@ -438,7 +450,9 @@
     <div class="cd-overlay" id="cd-overlay">
         <button class="cd-close" id="cd-close" aria-label="关闭">&times;</button>
         <div class="cd-modal">
+            <button class="cd-nav prev" id="cd-prev" aria-label="上一页">&lsaquo;</button>
             <div class="cd-track" id="cd-track"></div>
+            <button class="cd-nav next" id="cd-next" aria-label="下一页">&rsaquo;</button>
             <div class="cd-dots" id="cd-dots"></div>
         </div>
     </div>
@@ -783,16 +797,26 @@
             dots.innerHTML = pages.map((_, i) => `<div class="cd-dot${i === 0 ? ' active' : ''}"></div>`).join('');
             track.scrollLeft = 0;
             document.getElementById('cd-overlay').classList.add('show');
+            if (window._cdSyncNav) window._cdSyncNav();
         }
 
-        // 翻页指示点跟随滚动
+        // 翻页：指示点 + 左右箭头跟随滚动
         (function () {
             const track = document.getElementById('cd-track');
-            track.addEventListener('scroll', () => {
+            const prev = document.getElementById('cd-prev');
+            const next = document.getElementById('cd-next');
+            function sync() {
                 const idx = Math.round(track.scrollLeft / track.clientWidth);
+                const last = track.children.length - 1;
                 document.querySelectorAll('#cd-dots .cd-dot').forEach((d, i) =>
                     d.classList.toggle('active', i === idx));
-            });
+                prev.disabled = idx <= 0;
+                next.disabled = idx >= last;
+            }
+            track.addEventListener('scroll', sync);
+            prev.onclick = () => track.scrollBy({ left: -track.clientWidth, behavior: 'smooth' });
+            next.onclick = () => track.scrollBy({ left: track.clientWidth, behavior: 'smooth' });
+            window._cdSyncNav = sync; // 打开卡牌后初始化箭头状态
         })();
 
         document.getElementById('cd-close').onclick = () =>
