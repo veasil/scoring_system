@@ -112,7 +112,7 @@
                     <div class="card-input">
                         <label for="card-number">卡牌编号:</label>
                         <input type="number" id="card-number" min="1" max="45" placeholder="输入1-45">
-                        <button id="view-event" class="view-event-btn">查看事件</button>
+                        <button id="view-event" class="view-event-btn">查看卡牌</button>
                     </div>
                     <div class="choice-input">
                         <label>选择选项:</label>
@@ -456,6 +456,7 @@
     </div>
 
     <!-- <script src="cards-data.js"></script> -->
+    <script src="cards-pdf-map.js"></script>
     <script src="js/starfield.js"></script>
     <script src="global-state.js"></script>
     <script src="supervisor-controller.js"></script>
@@ -1534,10 +1535,12 @@
                         ts: Date.now()
                     });
                 }
+                const pdfPage = window.getCardPdfPage ? window.getCardPdfPage(card.card_code) : null;
+                const pdfUrl = window.CARD_PDF_URL || '';
+                const hasPdf = pdfPage && pdfUrl;
                 document.getElementById('modal-body').innerHTML = `
                     <h3>卡牌 ${card.card_code || cardNum} - ${card.safetyType}</h3>
                     ${card.guide_text ? `<p style="color:#8a6d3b;font-style:italic">${card.guide_text}</p>` : ''}
-                    <p>${card.event}</p>
                     <div class="audio-player" id="card-audio-player">
                         <button class="audio-player-btn" id="audio-play-btn" title="播放/暂停">
                             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -1554,14 +1557,23 @@
                             </div>
                         </div>
                     </div>
-                    <div style="margin-top: 2rem;">
-                        <h4>选项：</h4>
-                        <div style="margin-top: 1rem;">
-                            <p><strong>A:</strong> ${card.options.A.text}</p>
-                            <p><strong>B:</strong> ${card.options.B.text}</p>
-                            <p><strong>C:</strong> ${card.options.C.text}</p>
-                        </div>
-                    </div>
+                    ${hasPdf
+                        ? `<div class="card-pdf-wrap">
+                            <iframe class="card-pdf-frame" src="${pdfUrl}#page=${pdfPage}&view=FitH&toolbar=1"
+                                    title="卡牌 ${card.card_code} 印刷版" loading="lazy"></iframe>
+                           </div>
+                           <p class="card-pdf-hint">📄 印刷版第 ${pdfPage} 页 · 若未正常显示可
+                               <a href="${pdfUrl}#page=${pdfPage}" target="_blank" rel="noopener">在新窗口打开</a></p>`
+                        : `<p>${card.event}</p>
+                           <div style="margin-top: 2rem;">
+                               <h4>选项：</h4>
+                               <div style="margin-top: 1rem;">
+                                   <p><strong>A:</strong> ${card.options.A.text}</p>
+                                   <p><strong>B:</strong> ${card.options.B.text}</p>
+                                   <p><strong>C:</strong> ${card.options.C.text}</p>
+                               </div>
+                           </div>`
+                    }
                 `;
 
                 // 初始化音频播放器
