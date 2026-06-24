@@ -331,3 +331,12 @@ admin-panel 显示时统一转北京时间（UTC+8，`BEIJING_TZ`）。
 **根因**: `src/services/sms.js` 的 60s 重发间隔只写在 `!bmobSMS`（开发模拟）分支里；真实 `bmobSMS.sendSmsCode` 分支没有任何限流/人机校验。
 **修复**: 把限流抽成 `checkSendQuota(phone, ip)` 前置守卫，对 mock 与 Bmob 两个分支统一生效（同号 60s/每日≤10、同 IP 每小时≤20）；新增 `src/services/captcha.js`（腾讯天御 TC3 签名，`CAPTCHA_ENABLED` 开关）；`server.js` 设 `trust proxy` 让 `req.ip` 取真实 IP。
 **关键点**: 防护逻辑（限流/鉴权）必须放在 mock 与真实分支的**公共前置路径**，不能只挂在某一分支；新增「生产才走」的分支时，回头检查开发分支里的防护是否也要带过去。内存限流默认单实例，多副本需换 Redis。
+
+---
+
+### 🔧 [2026-06-24] TDZ 静默吞掉导致全部系统设置回退默认
+
+**现象**: 后台把 `REVIEW_MIN_CARDS` 改成 4，复盘已按 4 张生效，但 `index.html` 自由版仍显示/要求「不少于 7 张」。控制台报 `Cannot access 'systemSettings'/'setupData' before initialization`、`Failed to load system settings`、`Failed to parse GAME_MODES`。
+**根因**: `index.html` 的 `window.addEventListener('load')` 回调里，`await loadSystemSettings()` 在前，而它（及其调用的 `renderGameModes`）用到的 `let systemSettings`/`let setupData` 声明在后——函数声明被提升可被早调用，但 `let` 此刻仍在**暂时性死区(TDZ)**，访问即抛错。异常被 `loadSystemSettings` 的 `catch` 静默吞掉，`systemSettings` 留空 `{}`，所有读设置处 `parseInt(undefined)||7` 回退默认。`game-review.js` 独立读设置故不受影响，造成「复盘 4、自由版 7」的分裂假象。
+**修复**: 把 `systemSettings`、`setupData` 两个声明前移到 `await loadSystemSettings()` 调用之前（与既有 `authState` 同样处理），删除原处重复声明（`index.html:509-537`、原 593/1984 行）。
+**关键点**: 凡是会被**初始化期早调用链**（`loadSystemSettings → renderGameModes → globalState.initialize`）触达的 `let/const`，必须声明在调用点之前；函数声明会提升、`let/const` 不会。排查时把"早执行链"完整列一遍（哪些函数在 await 期间真正被调用、各自引用哪些后置绑定），一次性前移，别逐个打地鼠。另：`try/catch` 把初始化异常静默吞掉时，**所有** system 参数（BRANDING/GAME_MODES/ATTRIBUTES_CONFIG/REVIEW_MIN_CARDS）会一起回退默认，只是恰好和默认值相同的项不易察觉。

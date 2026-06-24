@@ -179,6 +179,9 @@ const upload = multer({
 app.set("trust proxy", 1);
 
 app.use(morgan("dev"));
+// 复盘报告内嵌大量 base64 图片（卡面/插画/品牌 banner），单独放宽该路由的 body 上限；
+// 其余接口仍走 2mb 全局限制（此中间件先于全局解析，express.json 解析后会 skip 重复解析）。
+app.use("/api/upload/report", express.json({ limit: "16mb" }));
 app.use(express.json({ limit: "2mb" }));
 
 // 本地开发：同域访问最省事；如果你前后端分离，这里把 origin 改成你的前端地址
