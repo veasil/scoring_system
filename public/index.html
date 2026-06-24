@@ -517,6 +517,24 @@
             // 同理：systemSettings 也必须在 loadSystemSettings() 之前声明，
             // 否则 forEach 里访问它会因 TDZ 抛 "Cannot access 'systemSettings' before initialization"
             let systemSettings = {};
+            // setupData 同理：renderGameModes()（由 loadSystemSettings 调用）会写 setupData.mode，
+            // 必须在调用前声明，否则 TDZ 抛 "Cannot access 'setupData' before initialization"
+            let setupData = {
+                location: '',
+                players: {
+                    enlightenment: 0,
+                    growth: 0,
+                    adolescence: 0,
+                    adults: 0
+                },
+                mode: 'standard', // standard, essence, free
+                settings: {
+                    duration: 5000,
+                    targetCards: 15,
+                    cardsPerPhase: { '启蒙期': 5, '成长期': 5, '青春期': 5 }
+                },
+                activityCode: null
+            };
 
             // Fetch cards data and settings
             try {
@@ -1981,22 +1999,7 @@
             };
 
             // ========== Setup Wizard Logic ==========
-            let setupData = {
-                location: '',
-                players: {
-                    enlightenment: 0,
-                    growth: 0,
-                    adolescence: 0,
-                    adults: 0
-                },
-                mode: 'standard', // standard, essence, free
-                settings: {
-                    duration: 5000,
-                    targetCards: 15,
-                    cardsPerPhase: { '启蒙期': 5, '成长期': 5, '青春期': 5 }
-                },
-                activityCode: null
-            };
+            // setupData 已提前到 loadSystemSettings() 调用之前声明（见上方 TDZ 注释）
 
             const setupModal = document.getElementById('setup-modal');
             const setupClose = document.getElementById('setup-close');
