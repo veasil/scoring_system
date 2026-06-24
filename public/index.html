@@ -688,6 +688,7 @@
 
                 // 总是添加自由版（如果配置里没写的话，通常建议配置里包含）
                 if (!modes.find(m => m.id === 'free')) {
+                    const minCards = parseInt(systemSettings.REVIEW_MIN_CARDS) || 7;
                     const freeCard = document.createElement('div');
                     freeCard.className = 'mode-choice-card';
                     freeCard.dataset.mode = 'free';
@@ -695,7 +696,7 @@
                         <h4>自由版</h4>
                         <div class="mode-desc">自定义设置</div>
                         <div class="mode-time">自定义</div>
-                        <div class="mode-detail">不少于7张</div>
+                        <div class="mode-detail" id="free-mode-min-detail">不少于${minCards}张</div>
                     `;
                     freeCard.onclick = () => {
                         document.querySelectorAll('.mode-choice-card').forEach(c => c.classList.remove('selected'));
