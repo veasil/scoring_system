@@ -514,6 +514,9 @@
                 token: localStorage.getItem('WQT_AUTH_TOKEN') || null,
                 user: null
             };
+            // 同理：systemSettings 也必须在 loadSystemSettings() 之前声明，
+            // 否则 forEach 里访问它会因 TDZ 抛 "Cannot access 'systemSettings' before initialization"
+            let systemSettings = {};
 
             // Fetch cards data and settings
             try {
@@ -590,7 +593,7 @@
             let hasStartedNewGame = false; // 跟踪是否已按新游戏
             let skillsUsed = { '安全力': false, '脑波力': false, '实感力': false, '创心力': false, '沟通力': false };
             let creativeOptions = {}; // 存储创心力技能的选项D
-            let systemSettings = {}; // 全局系统配置
+            // systemSettings 已提前到 loadSystemSettings() 调用之前声明（见上方 TDZ 注释）
 
             async function loadSystemSettings() {
                 try {
