@@ -10,8 +10,11 @@
 
     <el-table :data="activities" v-loading="loading" border size="small">
       <el-table-column prop="id" label="ID" width="60" />
-      <el-table-column prop="activity_code" label="活动码" width="110">
-        <template #default="{ row }"><el-tag size="small" type="warning">{{ row.activity_code }}</el-tag></template>
+      <el-table-column prop="activity_code" label="活动码" width="150">
+        <template #default="{ row }">
+          <el-tag size="small" type="warning">{{ row.activity_code }}</el-tag>
+          <span style="color:#909399;font-size:12px;margin-left:4px">{{ categoryLabel(row.activity_code) }}</span>
+        </template>
       </el-table-column>
       <el-table-column prop="name" label="活动名称" min-width="160" />
       <el-table-column prop="organizer" label="组织方" width="130" />
@@ -38,6 +41,14 @@
     <el-dialog v-model="dialog" :title="editing ? '编辑活动' : '新建活动'" width="460px">
       <el-form :model="form" label-width="80px">
         <el-form-item label="活动名称"><el-input v-model="form.name" /></el-form-item>
+        <el-form-item label="品类" v-if="!editing">
+          <el-select v-model="form.category" style="width:100%">
+            <el-option label="普通活动（G）" value="general" />
+            <el-option label="测试活动（T）" value="test" />
+            <el-option label="系列活动（S）" value="series" />
+          </el-select>
+          <div style="color:#909399;font-size:12px">企业级(E)/组织申请(A) 由对应入口自动生成</div>
+        </el-form-item>
         <el-form-item label="组织方"><el-input v-model="form.organizer" /></el-form-item>
         <el-form-item label="开始"><el-date-picker v-model="form.started_at" type="datetime" value-format="x" style="width:100%" /></el-form-item>
         <el-form-item label="结束"><el-date-picker v-model="form.ended_at" type="datetime" value-format="x" style="width:100%" /></el-form-item>
@@ -87,6 +98,13 @@ const STATUS_MAP = {
   archived: { label: '已归档', type: 'info' }
 }
 function statusTag(s) { return STATUS_MAP[s] || { label: s, type: 'info' } }
+
+// 由活动码首字母反推品类（与后端 ACTIVITY_CATEGORY_PREFIX 对应；旧 ACT- 码归为 —）
+const CATEGORY_BY_PREFIX = { T: '测试', S: '系列', E: '企业级', A: '组织申请', G: '普通' }
+function categoryLabel(code) {
+  if (!code || /^ACT-/i.test(code)) return ''
+  return CATEGORY_BY_PREFIX[code[0]?.toUpperCase()] || ''
+}
 const pendingCount = computed(() => activities.value.filter(a => a.status === 'pending_approval').length)
 
 async function load() {
@@ -117,11 +135,11 @@ const dialog = ref(false)
 const editing = ref(false)
 const saving = ref(false)
 const editId = ref(null)
-const form = reactive({ name: '', organizer: '', started_at: null, ended_at: null, status: 'active' })
+const form = reactive({ name: '', organizer: '', started_at: null, ended_at: null, status: 'active', category: 'general' })
 
 function openCreate() {
   editing.value = false; editId.value = null
-  Object.assign(form, { name: '', organizer: '', started_at: null, ended_at: null, status: 'active' })
+  Object.assign(form, { name: '', organizer: '', started_at: null, ended_at: null, status: 'active', category: 'general' })
   dialog.value = true
 }
 function openEdit(row) {
@@ -135,7 +153,7 @@ async function save() {
   try {
     const body = { name: form.name, organizer: form.organizer || null, started_at: form.started_at || null, ended_at: form.ended_at || null }
     if (editing.value) { body.status = form.status; await updateActivity(editId.value, body) }
-    else await createActivity(body)
+    else { body.category = form.category; await createActivity(body) }
     ElMessage.success('已保存'); dialog.value = false; load()
   } catch (e) { ElMessage.error(e.response?.data?.error || '保存失败') }
   finally { saving.value = false }

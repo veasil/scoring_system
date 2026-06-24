@@ -885,7 +885,7 @@ app.post("/api/enterprise/activities", authMiddleware, requireEnterprise, async 
   const { name, organizer, started_at, ended_at } = req.body || {};
   if (!name) return res.status(400).json({ error: "活动名称不能为空" });
   try {
-    const code = await generateActivityCode();
+    const code = await generateActivityCode('enterprise');
     const result = await dbRun(
       "INSERT INTO activities(name, organizer, activity_code, started_at, ended_at, created_by, enterprise_id) VALUES(?,?,?,?,?,?,?)",
       [name, organizer || null, code, started_at || null, ended_at || null, req.user.uid, req.org.id]
@@ -2056,25 +2056,32 @@ app.delete("/api/admin/oss/files", authMiddleware, async (req, res) => {
 
 // ======== API: 活动管理 ========
 
-// 生成活动码 ACT-001 格式
-async function generateActivityCode() {
-  // 序号基于已有 activity_code 解析，而非 MAX(id)：
-  // id 自增序列在 SQLite→PG 迁移 / 行删除后会与 code 序号脱节，
-  // MAX(id)+1 可能撞到已存在的 code（违反 activities_activity_code_key 唯一约束）。
-  const rows = await dbAll("SELECT activity_code FROM activities WHERE activity_code LIKE 'ACT-%'");
-  let maxNum = 0;
-  for (const r of rows) {
-    const m = /^ACT-(\d+)$/.exec(r.activity_code || "");
-    if (m) maxNum = Math.max(maxNum, parseInt(m[1], 10));
-  }
-  // 从 maxNum+1 起逐个尝试，校验唯一后返回（防御历史脏数据 / 并发碰撞）
-  for (let n = maxNum + 1; n < maxNum + 1000; n++) {
-    const code = `ACT-${String(n).padStart(3, '0')}`;
+// 活动码品类前缀（1 位）。新增品类时在此登记即可。
+const ACTIVITY_CATEGORY_PREFIX = {
+  test: 'T',        // 测试活动
+  series: 'S',      // 系列活动
+  enterprise: 'E',  // 企业级活动
+  apply: 'A',       // 组织申请活动（pending_approval）
+  general: 'G',     // 普通/官方活动（默认）
+};
+
+// 生成活动码：<品类前缀1位><4位随机>，共 5 位（如 T7K9Q / E3M8X）。
+//   - 随机字符集去掉易混淆的 0/O/1/I；查询侧大小写不敏感（lookup 时 toUpperCase）。
+//   - 不再用顺序自增：避免可枚举猜测、不暴露活动总数，也绕开 id 序列脱节的唯一约束坑。
+//   - 历史 ACT-xxx 旧码不受影响（仍可按原值查询）。
+async function generateActivityCode(category = 'general') {
+  const prefix = ACTIVITY_CATEGORY_PREFIX[category] || ACTIVITY_CATEGORY_PREFIX.general;
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const bytes = crypto.randomBytes(4);
+    let rand = "";
+    for (let i = 0; i < 4; i++) rand += alphabet[bytes[i] % alphabet.length];
+    const code = prefix + rand;
     const exists = await dbGet("SELECT id FROM activities WHERE activity_code = ?", [code]);
     if (!exists) return code;
   }
-  // 极端兜底：时间戳后缀保证唯一
-  return `ACT-${Date.now().toString(36).toUpperCase()}`;
+  // 极小概率连续碰撞，回退加时间戳后缀保证唯一
+  return `${prefix}${Date.now().toString(36).toUpperCase()}`;
 }
 
 // 生成唯一邀请码：8 位大写字母+数字（去掉易混淆的 0/O/1/I），与 invite_codes.code 去重
@@ -2111,10 +2118,10 @@ app.get("/api/admin/activities", authMiddleware, async (req, res) => {
 });
 
 app.post("/api/admin/activities", authMiddleware, async (req, res) => {
-  const { name, organizer, started_at, ended_at } = req.body || {};
+  const { name, organizer, started_at, ended_at, category } = req.body || {};
   if (!name) return res.status(400).json({ error: "活动名称不能为空" });
   try {
-    const code = await generateActivityCode();
+    const code = await generateActivityCode(category || 'general');
     const result = await dbRun(
       "INSERT INTO activities(name, organizer, activity_code, started_at, ended_at, created_by) VALUES(?,?,?,?,?,?)",
       [name, organizer || null, code, started_at || null, ended_at || null, req.user.uid]
@@ -2164,7 +2171,7 @@ app.post("/api/game/join-activity", authMiddleware, async (req, res) => {
   const { activity_code, session_id } = req.body || {};
   if (!activity_code || !session_id) return res.status(400).json({ error: "缺少参数" });
   try {
-    const activity = await dbGet("SELECT * FROM activities WHERE activity_code = ? AND status = 'active'", [activity_code]);
+    const activity = await dbGet("SELECT * FROM activities WHERE activity_code = ? AND status = 'active'", [activity_code.toUpperCase()]);
     if (!activity) return res.status(404).json({ error: "活动码无效或活动已结束" });
 
     // 获取该活动当前最大桌号
@@ -2213,10 +2220,10 @@ app.get("/api/activities/by-code/:code", async (req, res) => {
 
 // 守望者创建活动（登录用户均可创建）
 app.post("/api/activities", authMiddleware, async (req, res) => {
-  const { name, location, started_at } = req.body || {};
+  const { name, location, started_at, category } = req.body || {};
   if (!name) return res.status(400).json({ error: "活动名称不能为空" });
   try {
-    const code = await generateActivityCode();
+    const code = await generateActivityCode(category || 'general');
     const result = await dbRun(
       "INSERT INTO activities(name, organizer, activity_code, started_at, created_by) VALUES(?,?,?,?,?)",
       [name, location || null, code, started_at || Date.now(), req.user.uid]
@@ -2232,7 +2239,7 @@ app.post("/api/activities/apply", authMiddleware, async (req, res) => {
   const { name, location, reason } = req.body || {};
   if (!name) return res.status(400).json({ error: "活动名称不能为空" });
   try {
-    const code = await generateActivityCode();
+    const code = await generateActivityCode('apply');
     const result = await dbRun(
       "INSERT INTO activities(name, organizer, activity_code, started_at, created_by, status) VALUES(?,?,?,?,?,?)",
       [name, location || null, code, Date.now(), req.user.uid, 'pending_approval']
