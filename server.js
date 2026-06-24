@@ -1824,7 +1824,7 @@ app.post("/api/llm/story", authMiddleware, async (req, res) => {
   if (!prompt) return res.status(400).json({ error: "缺少 prompt" });
 
   const rawMaxTokens = Number(req.body?.max_tokens);
-  const maxTokens = Number.isFinite(rawMaxTokens) ? Math.min(Math.max(rawMaxTokens, 200), 4000) : 1200;
+  const maxTokens = Number.isFinite(rawMaxTokens) ? Math.min(Math.max(rawMaxTokens, 200), 8000) : 1200;
   const rawTemperature = Number(req.body?.temperature);
   const temperature = Number.isFinite(rawTemperature) ? Math.min(Math.max(rawTemperature, 0), 1.2) : 0.7;
 
@@ -1933,6 +1933,100 @@ app.post("/api/llm/story", authMiddleware, async (req, res) => {
   } catch (e) {
     console.error(`LLM Network Error:`, e);
     res.status(502).json({ error: "LLM 网络请求失败" });
+  }
+});
+
+// ======== API: 文生图（复盘报告插画 / banner）========
+// 使用阿里云 DashScope 通义万相（异步任务 + 轮询），下载结果图返回 base64 data URI，
+// 便于前端 html2canvas 导出海报时无跨域问题。未配置 KEY 时返回 501，让前端优雅降级。
+app.post("/api/llm/image", authMiddleware, async (req, res) => {
+  const prompt = (req.body?.prompt || "").toString().trim();
+  if (!prompt) return res.status(400).json({ error: "缺少 prompt" });
+
+  const size = (req.body?.size || "1024*1024").toString();
+  // 兼容前端可能传 "1024x1024" 的写法
+  const normSize = size.replace("x", "*");
+
+  try {
+    let kRow = await dbGet("SELECT value FROM system_settings WHERE key = 'DASHSCOPE_API_KEY'");
+    const apiKey = (kRow && kRow.value) ? decryptVal(kRow.value) : process.env.DASHSCOPE_API_KEY;
+    if (!apiKey) {
+      return res.status(501).json({ error: "后端未配置 DASHSCOPE_API_KEY（生图功能不可用）" });
+    }
+
+    let mRow = await dbGet("SELECT value FROM system_settings WHERE key = 'DASHSCOPE_IMAGE_MODEL'");
+    const model = (mRow && mRow.value) ? mRow.value : (process.env.DASHSCOPE_IMAGE_MODEL || "wanx2.1-t2i-turbo");
+
+    // 1) 创建异步任务
+    const createResp = await fetch(
+      "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+          "X-DashScope-Async": "enable"
+        },
+        body: JSON.stringify({
+          model,
+          input: { prompt },
+          parameters: { size: normSize, n: 1 }
+        })
+      }
+    );
+
+    if (!createResp.ok) {
+      const t = await createResp.text().catch(() => "");
+      console.error(`生图任务创建失败: ${createResp.status} - ${t}`);
+      return res.status(502).json({ error: `生图任务创建失败(${createResp.status})` });
+    }
+
+    const createData = await createResp.json();
+    const taskId = createData?.output?.task_id;
+    if (!taskId) {
+      return res.status(502).json({ error: "生图任务未返回 task_id" });
+    }
+
+    // 2) 轮询任务结果（最多 ~60s）
+    let imageUrl = "";
+    const deadline = Date.now() + 60000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 2500));
+      const pollResp = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
+        headers: { "Authorization": `Bearer ${apiKey}` }
+      });
+      if (!pollResp.ok) continue;
+      const pollData = await pollResp.json();
+      const status = pollData?.output?.task_status;
+      if (status === "SUCCEEDED") {
+        imageUrl = pollData?.output?.results?.[0]?.url || "";
+        break;
+      }
+      if (status === "FAILED" || status === "UNKNOWN") {
+        const msg = pollData?.output?.message || "生图任务失败";
+        return res.status(502).json({ error: msg });
+      }
+    }
+
+    if (!imageUrl) {
+      return res.status(504).json({ error: "生图超时，请稍后重试" });
+    }
+
+    // 3) 下载图片转 base64 data URI（规避 html2canvas 跨域）
+    const imgResp = await fetch(imageUrl);
+    if (!imgResp.ok) {
+      // 拿不到图就直接把远程 URL 返回，前端自行决定是否使用
+      return res.json({ ok: true, url: imageUrl, dataUri: "" });
+    }
+    const arrayBuf = await imgResp.arrayBuffer();
+    const contentType = imgResp.headers.get("content-type") || "image/png";
+    const base64 = Buffer.from(arrayBuf).toString("base64");
+    const dataUri = `data:${contentType};base64,${base64}`;
+
+    res.json({ ok: true, url: imageUrl, dataUri });
+  } catch (e) {
+    console.error("生图接口异常:", e);
+    res.status(502).json({ error: "生图网络请求失败" });
   }
 });
 

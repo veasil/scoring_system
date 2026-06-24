@@ -193,6 +193,7 @@ card_groups (卡牌组/版本套装，绑定 cards_released 快照)
 OSS：GET  /api/admin/oss/files   DELETE /api/admin/oss/files
 上传：POST /api/upload/audio|report
 LLM：POST /api/llm/story   POST /api/admin/generate-card
+      POST /api/llm/image（文生图，DashScope 通义万相异步轮询，返回 base64 dataUri；未配 KEY 返 501，前端优雅降级）
 设置：GET  /api/settings
 ```
 
