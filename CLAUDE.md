@@ -43,9 +43,10 @@ wqt-auth-backend/
 │   ├── middleware/        # auth.js（JWT 校验）、rbac.js（角色/组织权限）
 │   ├── services/          # sessions.js（单设备会话）、sms.js（短信验证码）
 │   └── routes/            # auth.routes.js（认证）、account-admin.routes.js（账号资产）
-├── admin-panel/
-│   ├── app.py             # Streamlit 管理后台（含组织管理页面）
-│   └── db_utils.py        # 直连 wqt.db 的查询工具，含 AES 解密
+├── admin-web/
+│   ├── index.html
+│   ├── src/
+│   └── package.json
 ├── enterprise-panel/      # 组织管理员 Vue 3 SPA
 │   ├── vite.config.js     # base: '/enterprise/', proxy→8080
 │   ├── src/views/         # Dashboard/Members/Activities/Sessions/InviteCodes/Settings
@@ -63,7 +64,6 @@ wqt-auth-backend/
 │   ├── wqt.db             # 主数据库
 │   └── cards.db           # 卡牌数据库（独立，可切换数据源）
 ├── scripts/               # 部署脚本、迁移脚本、nginx 配置
-├── implementation_plan.md # 当前迭代详细规划（Task 1-6）
 └── .env                   # 环境变量（不提交）
 ```
 
