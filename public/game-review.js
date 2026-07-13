@@ -23,6 +23,23 @@
     }
   }
 
+  function notifyAiTutorLevel1Complete(reviewData, reportUrl) {
+    if (!window.parent || window.parent === window || !reviewData) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const targetOrigin = params.get("aitutor_origin") || "*";
+    const journeyId = params.get("journeyId") || undefined;
+
+    window.parent.postMessage({
+      type: "WQT_LEVEL1_COMPLETED",
+      journeyId,
+      sessionId: reviewData.session && reviewData.session.id,
+      wqtSessionId: reviewData.session && reviewData.session.id,
+      reviewSnapshot: reviewData,
+      reportUrl
+    }, targetOrigin);
+  }
+
   async function api(path, { method = "GET", body = null } = {}) {
     const headers = { "Content-Type": "application/json" };
     const token = getToken();
@@ -1055,6 +1072,7 @@
 
       renderProgress(target, "复盘报告已生成！", 100);
       renderResult(target, { structured, reportUrl });
+      notifyAiTutorLevel1Complete(reviewData, reportUrl);
     } catch (error) {
       renderStatus(target, `复盘生成失败：${error.message}`);
     } finally {
