@@ -10,6 +10,9 @@
     "migrate:pg": "node scripts/migrate_sqlite_to_pg.mjs",
     "test:bench": "node test/bench/run.mjs"
   },
+  "allowScripts": {
+    "sqlite3@5.1.7": true
+  },
   "dependencies": {
     "ali-oss": "^6.23.0",
     "bcryptjs": "^2.4.3",
