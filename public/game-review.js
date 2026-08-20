@@ -837,12 +837,20 @@
     return ret.story || "";
   }
 
-  // 调用文生图，返回 data URI；失败/未配置时返回空串（优雅降级，不阻断复盘）
-  async function callImage(prompt, { size = "1024*1024" } = {}) {
+  // JSON 请求受后端 2 MB body 限制；预留 prompt 等字段空间，过大的卡面改为纯文生图。
+  const MAX_REFERENCE_IMAGE_DATA_URI_LENGTH = 1400000;
+
+  // 调用文生图，返回 data URI；失败/未配置时返回空串（优雅降级，不阻断复盘）。
+  // ToAPIs 会把 imageDataUri 上传为参考图，DashScope 会忽略该字段并继续文生图。
+  async function callImage(prompt, { size = "1024*1024", referenceImageDataUri = "" } = {}) {
     try {
+      const body = { prompt, size };
+      if (referenceImageDataUri && referenceImageDataUri.length <= MAX_REFERENCE_IMAGE_DATA_URI_LENGTH) {
+        body.imageDataUri = referenceImageDataUri;
+      }
       const ret = await api("api/llm/image", {
         method: "POST",
-        body: { prompt, size }
+        body
       });
       return ret.dataUri || ret.url || "";
     } catch (e) {
@@ -963,15 +971,24 @@
     status("正在汇总伍力与风险雷达…", 45);
     const radars = computeRadars(reviewData, structured.riskRadar);
 
-    // 卡面条带与品牌 banner 素材先并行抓取（本地很快）
+    // 卡面条带、故事插画参考卡面与品牌素材先并行抓取（本地很快）
     const facesP = collectCardFaces(reviewData.cards);
+    const classicFacesP = pickClassicCardFaces(reviewData.cards);
     const brandP = collectBrandAssets();
 
-    // 故事插画：用生图模型按结构化场景并行生成（对齐小伍 IP 画风）
+    // 故事插画：将本局代表性卡面作为 ToAPIs 参考图，令画面贴近实际闯关内容。
+    // 每个请求只带一张卡面，既保留多场景差异，也避免放大请求体。
     const scenes = pickScenes(structured);
+    const classicFaces = await classicFacesP;
     status(`正在用生图模型绘制闯关故事插画（${scenes.length} 张）…`, 55);
     const dataUris = await Promise.all(
-      scenes.map((sc) => callImage(buildScenePrompt(sc, structured), { size: "768*768" }))
+      scenes.map((sc, index) => {
+        const reference = classicFaces.length ? classicFaces[index % classicFaces.length] : null;
+        return callImage(buildScenePrompt(sc, structured), {
+          size: "768*768",
+          referenceImageDataUri: reference?.dataUri || ""
+        });
+      })
     );
     const sceneImages = scenes
       .map((sc, i) => ({ caption: sc.caption || "", dataUri: dataUris[i] || "" }))

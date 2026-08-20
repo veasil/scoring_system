@@ -15,6 +15,7 @@ const SENSITIVE_KEYS = [
   "JWT_SECRET", "OSS_BUCKET_NAME", "OSS_REGION", "OSS_ENDPOINT",
   "ALIBABA_CLOUD_ACCESS_KEY_ID", "ALIBABA_CLOUD_ACCESS_KEY_SECRET",
   "BMOB_APP_ID", "BMOB_REST_KEY", "DEEPSEEK_API_KEY", "DASHSCOPE_API_KEY",
+  "TOAPIS_API_KEY",
 ];
 const isSensitive = (key) =>
   SENSITIVE_KEYS.some((s) => key.includes(s)) || key.includes("KEY") || key.includes("SECRET");

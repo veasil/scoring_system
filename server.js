@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import morgan from "morgan";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
@@ -17,6 +18,7 @@ import { authMiddleware } from "./src/middleware/auth.js";
 import { requireRole, requireEnterprise } from "./src/middleware/rbac.js";
 import { resolveValidity } from "./src/account.js";
 import { normalizePhone, initSms } from "./src/services/sms.js";
+import { generateWithDashScope, generateWithToApis } from "./src/services/image-generation.js";
 import authRouter from "./src/routes/auth.routes.js";
 import accountAdminRouter from "./src/routes/account-admin.routes.js";
 import adminDataRouter from "./src/routes/admin-data.routes.js";
@@ -177,6 +179,42 @@ const upload = multer({
 
 // 信任反向代理（Zeabur/nginx），让 req.ip 取到真实客户端 IP——短信接口 IP 限流依赖它
 app.set("trust proxy", 1);
+
+// ======== 安全响应头 (HSTS / CSP / X-Frame-Options 等) ========
+// CSP 白名单按前端实际加载的外部资源收敛：
+//   - script: cdn.jsdelivr.net (html2canvas)；内联脚本/事件处理器较多，暂放 'unsafe-inline'，后续可改 nonce
+//   - style:   fonts.googleapis.com；内联 <style> 普遍，放 'unsafe-inline'
+//   - font:    fonts.gstatic.com (Google Fonts 实际字体文件)
+//   - img/media: 阿里云 OSS 香港桶（卡面/音频）；img 另含 data: (LLM 文生图返回 base64)
+//   - connect: 仅同源（前端不直连外部 API，LLM/OSS 都走后端代理）
+app.use(helmet({
+  // 关闭 COEP：OSS/jsdelivr/gstatic 不发 CORP 头，require-corp 会把这些图片/脚本/字体全部拦掉
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      "default-src": ["'self'"],
+      "script-src": ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+      // helmet 默认带 script-src-attr 'none' 会屏蔽所有 onclick=/onsubmit= 等内联事件处理器
+      // (index.html/my.html 等大量用到)，显式放开与 script-src 同等放宽，保持现状不破
+      "script-src-attr": ["'unsafe-inline'"],
+      "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      "font-src": ["'self'", "https://fonts.gstatic.com"],
+      "img-src": ["'self'", "data:", "https://ai5000days-scoring-system-hk.oss-cn-hongkong.aliyuncs.com"],
+      "media-src": ["'self'", "https://ai5000days-scoring-system-hk.oss-cn-hongkong.aliyuncs.com"],
+      "connect-src": ["'self'"],
+      "frame-ancestors": ["'none'"],
+      "object-src": ["'none'"],
+      "base-uri": ["'self'"],
+      "form-action": ["'self'"],
+    },
+  },
+  // frame-ancestors 'none' 已覆盖；X-Frame-Options 留 DENY 作为旧浏览器回退
+  xFrameOptions: { action: "deny" },
+  // HSTS：max-age 1 年，含子域
+  strictTransportSecurity: { maxAge: 31536000, includeSubDomains: true, preload: true },
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" },
+}));
 
 app.use(morgan("dev"));
 // 复盘报告内嵌大量 base64 图片（卡面/插画/品牌 banner），单独放宽该路由的 body 上限；
@@ -1939,97 +1977,58 @@ app.post("/api/llm/story", authMiddleware, async (req, res) => {
   }
 });
 
-// ======== API: 文生图（复盘报告插画 / banner）========
-// 使用阿里云 DashScope 通义万相（异步任务 + 轮询），下载结果图返回 base64 data URI，
-// 便于前端 html2canvas 导出海报时无跨域问题。未配置 KEY 时返回 501，让前端优雅降级。
-app.post("/api/llm/image", authMiddleware, async (req, res) => {
+// ======== API: 文生图 / 参考图生图（复盘报告插画 / banner）========
+// 返回 base64 data URI，便于前端 html2canvas 导出海报时无跨域问题。
+// provider=toapis 时支持 multipart image、imageUrl、image_urls、imageDataUri 作为参考图。
+app.post("/api/llm/image", authMiddleware, upload.single("image"), async (req, res) => {
   const prompt = (req.body?.prompt || "").toString().trim();
   if (!prompt) return res.status(400).json({ error: "缺少 prompt" });
 
   const size = (req.body?.size || "1024*1024").toString();
-  // 兼容前端可能传 "1024x1024" 的写法
-  const normSize = size.replace("x", "*");
 
   try {
-    let kRow = await dbGet("SELECT value FROM system_settings WHERE key = 'DASHSCOPE_API_KEY'");
-    const apiKey = (kRow && kRow.value) ? decryptVal(kRow.value) : process.env.DASHSCOPE_API_KEY;
+    const getSetting = async (key, fallback = "") => {
+      const row = await dbGet("SELECT value FROM system_settings WHERE key = ?", [key]);
+      return row && row.value ? decryptVal(row.value) : fallback;
+    };
+
+    const provider = String(
+      req.body?.provider
+        || await getSetting("IMAGE_PROVIDER", process.env.IMAGE_PROVIDER || (process.env.TOAPIS_API_KEY ? "toapis" : "dashscope"))
+    ).toLowerCase();
+
+    if (provider === "toapis") {
+      const apiKey = await getSetting("TOAPIS_API_KEY", process.env.TOAPIS_API_KEY);
+      if (!apiKey) {
+        return res.status(501).json({ error: "后端未配置 TOAPIS_API_KEY（生图功能不可用）" });
+      }
+
+      const result = await generateWithToApis({
+        apiKey,
+        baseUrl: await getSetting("TOAPIS_BASE_URL", process.env.TOAPIS_BASE_URL || "https://toapis.com"),
+        model: req.body?.model || await getSetting("TOAPIS_IMAGE_MODEL", process.env.TOAPIS_IMAGE_MODEL || "gpt-image-2"),
+        prompt,
+        size,
+        resolution: req.body?.resolution || await getSetting("TOAPIS_IMAGE_RESOLUTION", process.env.TOAPIS_IMAGE_RESOLUTION || "1k"),
+        quality: req.body?.quality || await getSetting("TOAPIS_IMAGE_QUALITY", process.env.TOAPIS_IMAGE_QUALITY || "medium"),
+        file: req.file,
+        body: req.body,
+        timeoutMs: Number(req.body?.timeoutMs) || 120000
+      });
+      return res.json(result);
+    }
+
+    const apiKey = await getSetting("DASHSCOPE_API_KEY", process.env.DASHSCOPE_API_KEY);
     if (!apiKey) {
       return res.status(501).json({ error: "后端未配置 DASHSCOPE_API_KEY（生图功能不可用）" });
     }
-
-    let mRow = await dbGet("SELECT value FROM system_settings WHERE key = 'DASHSCOPE_IMAGE_MODEL'");
-    const model = (mRow && mRow.value) ? mRow.value : (process.env.DASHSCOPE_IMAGE_MODEL || "wanx2.1-t2i-turbo");
-
-    // 1) 创建异步任务
-    const createResp = await fetch(
-      "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-          "X-DashScope-Async": "enable"
-        },
-        body: JSON.stringify({
-          model,
-          input: { prompt },
-          parameters: { size: normSize, n: 1 }
-        })
-      }
-    );
-
-    if (!createResp.ok) {
-      const t = await createResp.text().catch(() => "");
-      console.error(`生图任务创建失败: ${createResp.status} - ${t}`);
-      return res.status(502).json({ error: `生图任务创建失败(${createResp.status})` });
-    }
-
-    const createData = await createResp.json();
-    const taskId = createData?.output?.task_id;
-    if (!taskId) {
-      return res.status(502).json({ error: "生图任务未返回 task_id" });
-    }
-
-    // 2) 轮询任务结果（最多 ~60s）
-    let imageUrl = "";
-    const deadline = Date.now() + 60000;
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 2500));
-      const pollResp = await fetch(`https://dashscope.aliyuncs.com/api/v1/tasks/${taskId}`, {
-        headers: { "Authorization": `Bearer ${apiKey}` }
-      });
-      if (!pollResp.ok) continue;
-      const pollData = await pollResp.json();
-      const status = pollData?.output?.task_status;
-      if (status === "SUCCEEDED") {
-        imageUrl = pollData?.output?.results?.[0]?.url || "";
-        break;
-      }
-      if (status === "FAILED" || status === "UNKNOWN") {
-        const msg = pollData?.output?.message || "生图任务失败";
-        return res.status(502).json({ error: msg });
-      }
-    }
-
-    if (!imageUrl) {
-      return res.status(504).json({ error: "生图超时，请稍后重试" });
-    }
-
-    // 3) 下载图片转 base64 data URI（规避 html2canvas 跨域）
-    const imgResp = await fetch(imageUrl);
-    if (!imgResp.ok) {
-      // 拿不到图就直接把远程 URL 返回，前端自行决定是否使用
-      return res.json({ ok: true, url: imageUrl, dataUri: "" });
-    }
-    const arrayBuf = await imgResp.arrayBuffer();
-    const contentType = imgResp.headers.get("content-type") || "image/png";
-    const base64 = Buffer.from(arrayBuf).toString("base64");
-    const dataUri = `data:${contentType};base64,${base64}`;
-
-    res.json({ ok: true, url: imageUrl, dataUri });
+    const model = await getSetting("DASHSCOPE_IMAGE_MODEL", process.env.DASHSCOPE_IMAGE_MODEL || "wanx2.1-t2i-turbo");
+    const result = await generateWithDashScope({ apiKey, model, prompt, size });
+    res.json(result);
   } catch (e) {
     console.error("生图接口异常:", e);
-    res.status(502).json({ error: "生图网络请求失败" });
+    const status = String(e.message || "").includes("超时") ? 504 : 502;
+    res.status(status).json({ error: e.message || "生图网络请求失败" });
   }
 });
 
@@ -2726,6 +2725,21 @@ async function cleanupStaleSessions() {
 
 // ======== Start ========
 const HOST = process.env.HOST || '0.0.0.0';
+
+// 兜底 404：所有未命中路由返回品牌 404 页（替代 Express 默认的 "Cannot GET /xxx" 纯文本）
+// 注意：API 路由 (/api/*) 走各自的 res.status(404).json；这里只兜前端页面与静态资源未命中
+app.use((req, res) => {
+  // 接口未命中：返回 JSON，方便前端 fetch 不至于拿到一坨 HTML
+  if (req.path.startsWith("/api/") || req.path.startsWith("/enterprise/api") || req.path.startsWith("/admin/api")) {
+    return res.status(404).json({ error: "接口不存在", path: req.path });
+  }
+  // 优先 Accept: json 的请求也回 JSON
+  if (req.accepts("json") && !req.accepts("html")) {
+    return res.status(404).json({ error: "资源不存在", path: req.path });
+  }
+  res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
+});
+
 app.listen(PORT, HOST, () => {
   console.log(`✅ Server running on http://${HOST}:${PORT}`);
   console.log(`🌐 Public access via your server IP: http://127.0.0.1:${PORT}`);

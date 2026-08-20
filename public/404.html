@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>页面走丢了 · AI在5000天</title>
+  <link rel="stylesheet" href="/css/base.css" />
+  <style>
+    body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+           background: radial-gradient(circle at 50% 30%, #0b1a3a 0%, #050816 70%);
+           color: #e8ecf5; font-family: "Noto Sans SC", "Inter", system-ui, sans-serif; }
+    .nf-card { text-align: center; padding: 48px 28px; max-width: 460px; }
+    .nf-code { font-size: 96px; font-weight: 900; line-height: 1; letter-spacing: -2px;
+               background: linear-gradient(135deg, #6ec1ff 0%, #ffd166 100%);
+               -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .nf-title { margin: 16px 0 8px; font-size: 22px; font-weight: 700; }
+    .nf-sub { margin: 0 0 28px; font-size: 14px; color: #9aa6bd; line-height: 1.6; }
+    .nf-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .nf-btn { display: inline-block; padding: 10px 22px; border-radius: 999px; text-decoration: none;
+              font-size: 14px; font-weight: 600; transition: transform .15s ease, opacity .15s ease; }
+    .nf-btn:active { transform: scale(.97); }
+    .nf-btn-primary { background: linear-gradient(135deg, #4f8cff, #6ec1ff); color: #06122c; }
+    .nf-btn-ghost { border: 1px solid #2a3a5c; color: #cdd6ea; }
+    .nf-btn-ghost:hover { border-color: #6ec1ff; color: #6ec1ff; }
+    @media (prefers-reduced-motion: reduce) { .nf-btn { transition: none; } }
+  </style>
+</head>
+<body>
+  <main class="nf-card">
+    <div class="nf-code">404</div>
+    <h1 class="nf-title">这一页走丢了</h1>
+    <p class="nf-sub">链接可能输错了，或者页面已经搬走。回首页继续你的《AI在5000天》之旅吧。</p>
+    <div class="nf-actions">
+      <a class="nf-btn nf-btn-primary" href="/">返回首页</a>
+      <a class="nf-btn nf-btn-ghost" href="javascript:history.back()">返回上一页</a>
+    </div>
+  </main>
+</body>
+</html>
